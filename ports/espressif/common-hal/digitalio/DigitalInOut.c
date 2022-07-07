@@ -26,7 +26,7 @@
 
 #include "shared-bindings/digitalio/DigitalInOut.h"
 #include "py/runtime.h"
-#include "supervisor/shared/translate.h"
+#include "supervisor/shared/translate/translate.h"
 
 #include "components/driver/include/driver/gpio.h"
 
@@ -71,7 +71,7 @@ void common_hal_digitalio_digitalinout_deinit(digitalio_digitalinout_obj_t *self
 void common_hal_digitalio_digitalinout_switch_to_input(
     digitalio_digitalinout_obj_t *self, digitalio_pull_t pull) {
     common_hal_digitalio_digitalinout_set_pull(self, pull);
-    gpio_set_direction(self->pin->number, GPIO_MODE_DEF_INPUT);
+    gpio_set_direction(self->pin->number, GPIO_MODE_INPUT);
 }
 
 digitalinout_result_t common_hal_digitalio_digitalinout_switch_to_output(
@@ -108,11 +108,9 @@ digitalinout_result_t common_hal_digitalio_digitalinout_set_drive_mode(
     digitalio_digitalinout_obj_t *self,
     digitalio_drive_mode_t drive_mode) {
     gpio_num_t number = self->pin->number;
-    gpio_mode_t mode;
+    gpio_mode_t mode = GPIO_MODE_OUTPUT;
     if (drive_mode == DRIVE_MODE_OPEN_DRAIN) {
-        mode = GPIO_MODE_DEF_OD;
-    } else {
-        mode = GPIO_MODE_DEF_OUTPUT;
+        mode |= GPIO_MODE_OUTPUT_OD;
     }
     esp_err_t result = gpio_set_direction(number, mode);
     if (result != ESP_OK) {
@@ -144,9 +142,9 @@ void common_hal_digitalio_digitalinout_set_pull(
 digitalio_pull_t common_hal_digitalio_digitalinout_get_pull(
     digitalio_digitalinout_obj_t *self) {
     gpio_num_t gpio_num = self->pin->number;
-    if (REG_GET_BIT(GPIO_PIN_MUX_REG[gpio_num], FUN_PU) == 1) {
+    if (REG_GET_BIT(GPIO_PIN_MUX_REG[gpio_num], FUN_PU)) {
         return PULL_UP;
-    } else if (REG_GET_BIT(GPIO_PIN_MUX_REG[gpio_num], FUN_PD) == 1) {
+    } else if (REG_GET_BIT(GPIO_PIN_MUX_REG[gpio_num], FUN_PD)) {
         return PULL_DOWN;
     }
     return PULL_NONE;
