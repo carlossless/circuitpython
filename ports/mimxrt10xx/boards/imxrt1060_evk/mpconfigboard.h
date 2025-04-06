@@ -1,3 +1,12 @@
+// This file is part of the CircuitPython project: https://circuitpython.org
+//
+// SPDX-FileCopyrightText: Copyright (c) 2019 Scott Shawcroft for Adafruit Industries
+// SPDX-FileCopyrightText: Copyright (c) 2019 Artur Pacholec
+//
+// SPDX-License-Identifier: MIT
+
+#pragma once
+
 #define MICROPY_HW_BOARD_NAME "iMX RT 1060 EVK"
 #define MICROPY_HW_MCU_NAME "IMXRT1062DVJ6A"
 
@@ -16,11 +25,10 @@
 #define DEFAULT_UART_BUS_RX (&pin_GPIO_AD_B1_07)
 #define DEFAULT_UART_BUS_TX (&pin_GPIO_AD_B1_06)
 
-#define CIRCUITPY_DEBUG_UART_TX (&pin_GPIO_AD_B0_12)
-#define CIRCUITPY_DEBUG_UART_RX (&pin_GPIO_AD_B0_13)
-
+#define CIRCUITPY_CONSOLE_UART_TX (&pin_GPIO_AD_B0_12)
+#define CIRCUITPY_CONSOLE_UART_RX (&pin_GPIO_AD_B0_13)
 
 // Put host on the first USB so that right angle OTG adapters can fit. This is
 // the right port when looking at the board.
-#define CIRCUITPY_USB_DEVICE_INSTANCE 1
-#define CIRCUITPY_USB_HOST_INSTANCE 0
+#define CIRCUITPY_USB_DEVICE_INSTANCE 0
+#define CIRCUITPY_USB_HOST_INSTANCE 1

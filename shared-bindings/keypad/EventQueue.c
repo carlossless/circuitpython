@@ -1,31 +1,14 @@
-/*
- * This file is part of the Micro Python project, http://micropython.org/
- *
- * The MIT License (MIT)
- *
- * Copyright (c) 2021 Dan Halbert for Adafruit Industries
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
- */
+// This file is part of the CircuitPython project: https://circuitpython.org
+//
+// SPDX-FileCopyrightText: Copyright (c) 2021 Dan Halbert for Adafruit Industries
+//
+// SPDX-License-Identifier: MIT
 
+#include "py/stream.h"
+#include "py/mperrno.h"
 #include "py/objproperty.h"
 #include "py/runtime.h"
+#include "py/stream.h"
 #include "shared-bindings/keypad/Event.h"
 #include "shared-bindings/keypad/EventQueue.h"
 
@@ -35,10 +18,13 @@
 //|     You cannot create an instance of `EventQueue` directly. Each scanner creates an
 //|     instance when it is created.
 //|     """
+//|
 //|     ...
+//|
 
 //|     def get(self) -> Optional[Event]:
-//|         """Return the next key transition event. Return ``None`` if no events are pending.
+//|         """Remove the next key transition event from the `EventQueue` and return it.
+//|         Return ``None`` if no events are pending.
 //|
 //|         Note that the queue size is limited; see ``max_events`` in the constructor of
 //|         a scanner such as `Keys` or `KeyMatrix`.
@@ -50,7 +36,7 @@
 //|         """
 //|         ...
 //|
-STATIC mp_obj_t keypad_eventqueue_get(mp_obj_t self_in) {
+static mp_obj_t keypad_eventqueue_get(mp_obj_t self_in) {
     keypad_eventqueue_obj_t *self = MP_OBJ_TO_PTR(self_in);
 
     return common_hal_keypad_eventqueue_get(self);
@@ -58,7 +44,7 @@ STATIC mp_obj_t keypad_eventqueue_get(mp_obj_t self_in) {
 MP_DEFINE_CONST_FUN_OBJ_1(keypad_eventqueue_get_obj, keypad_eventqueue_get);
 
 //|     def get_into(self, event: Event) -> bool:
-//|         """Store the next key transition event in the supplied event, if available,
+//|         """Remove the next key transition event from the ``EventQueue`, store it in ``event``,
 //|         and return ``True``.
 //|         If there are no queued events, do not touch ``event`` and return ``False``.
 //|
@@ -73,7 +59,7 @@ MP_DEFINE_CONST_FUN_OBJ_1(keypad_eventqueue_get_obj, keypad_eventqueue_get);
 //|         """
 //|         ...
 //|
-STATIC mp_obj_t keypad_eventqueue_get_into(mp_obj_t self_in, mp_obj_t event_in) {
+static mp_obj_t keypad_eventqueue_get_into(mp_obj_t self_in, mp_obj_t event_in) {
     keypad_eventqueue_obj_t *self = MP_OBJ_TO_PTR(self_in);
 
     keypad_event_obj_t *event = MP_OBJ_TO_PTR(mp_arg_validate_type(event_in, &keypad_event_type, MP_QSTR_event));
@@ -83,11 +69,10 @@ STATIC mp_obj_t keypad_eventqueue_get_into(mp_obj_t self_in, mp_obj_t event_in) 
 MP_DEFINE_CONST_FUN_OBJ_2(keypad_eventqueue_get_into_obj, keypad_eventqueue_get_into);
 
 //|     def clear(self) -> None:
-//|         """Clear any queued key transition events. Also sets `overflowed` to ``False``.
-//|         """
+//|         """Clear any queued key transition events. Also sets `overflowed` to ``False``."""
 //|         ...
 //|
-STATIC mp_obj_t keypad_eventqueue_clear(mp_obj_t self_in) {
+static mp_obj_t keypad_eventqueue_clear(mp_obj_t self_in) {
     keypad_eventqueue_obj_t *self = MP_OBJ_TO_PTR(self_in);
 
     common_hal_keypad_eventqueue_clear(self);
@@ -105,7 +90,7 @@ MP_DEFINE_CONST_FUN_OBJ_1(keypad_eventqueue_clear_obj, keypad_eventqueue_clear);
 //|         """Return the number of events currently in the queue. Used to implement ``len()``."""
 //|         ...
 //|
-STATIC mp_obj_t keypad_eventqueue_unary_op(mp_unary_op_t op, mp_obj_t self_in) {
+static mp_obj_t keypad_eventqueue_unary_op(mp_unary_op_t op, mp_obj_t self_in) {
     keypad_eventqueue_obj_t *self = MP_OBJ_TO_PTR(self_in);
     uint16_t len = common_hal_keypad_eventqueue_get_length(self);
     switch (op) {
@@ -123,7 +108,8 @@ STATIC mp_obj_t keypad_eventqueue_unary_op(mp_unary_op_t op, mp_obj_t self_in) {
 //|     Set to ``False`` by  `clear()`.
 //|     """
 //|
-STATIC mp_obj_t keypad_eventqueue_get_overflowed(mp_obj_t self_in) {
+//|
+static mp_obj_t keypad_eventqueue_get_overflowed(mp_obj_t self_in) {
     keypad_eventqueue_obj_t *self = MP_OBJ_TO_PTR(self_in);
     return mp_obj_new_bool(common_hal_keypad_eventqueue_get_overflowed(self));
 }
@@ -132,21 +118,47 @@ MP_DEFINE_CONST_FUN_OBJ_1(keypad_eventqueue_get_overflowed_obj, keypad_eventqueu
 MP_PROPERTY_GETTER(keypad_eventqueue_overflowed_obj,
     (mp_obj_t)&keypad_eventqueue_get_overflowed_obj);
 
-STATIC const mp_rom_map_elem_t keypad_eventqueue_locals_dict_table[] = {
+static const mp_rom_map_elem_t keypad_eventqueue_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_clear),      MP_ROM_PTR(&keypad_eventqueue_clear_obj) },
     { MP_ROM_QSTR(MP_QSTR_get),        MP_ROM_PTR(&keypad_eventqueue_get_obj) },
     { MP_ROM_QSTR(MP_QSTR_get_into),   MP_ROM_PTR(&keypad_eventqueue_get_into_obj) },
     { MP_ROM_QSTR(MP_QSTR_overflowed), MP_ROM_PTR(&keypad_eventqueue_overflowed_obj) },
 };
 
-STATIC MP_DEFINE_CONST_DICT(keypad_eventqueue_locals_dict, keypad_eventqueue_locals_dict_table);
+static MP_DEFINE_CONST_DICT(keypad_eventqueue_locals_dict, keypad_eventqueue_locals_dict_table);
 
-const mp_obj_type_t keypad_eventqueue_type = {
-    { &mp_type_type },
-    .flags = MP_TYPE_FLAG_EXTENDED,
-    .name = MP_QSTR_EventQueue,
-    MP_TYPE_EXTENDED_FIELDS(
-        .unary_op = keypad_eventqueue_unary_op,
-        ),
-    .locals_dict = (mp_obj_t)&keypad_eventqueue_locals_dict,
+#if MICROPY_PY_SELECT
+static mp_uint_t eventqueue_ioctl(mp_obj_t self_in, mp_uint_t request, uintptr_t arg, int *errcode) {
+    (void)errcode;
+    keypad_eventqueue_obj_t *self = MP_OBJ_TO_PTR(self_in);
+    switch (request) {
+        case MP_STREAM_POLL: {
+            mp_uint_t flags = arg;
+            mp_uint_t ret = 0;
+            if ((flags & MP_STREAM_POLL_RD) && common_hal_keypad_eventqueue_get_length(self)) {
+                ret |= MP_STREAM_POLL_RD;
+            }
+            return ret;
+        }
+        default:
+            *errcode = MP_EINVAL;
+            return MP_STREAM_ERROR;
+    }
+}
+
+static const mp_stream_p_t eventqueue_p = {
+    .ioctl = eventqueue_ioctl,
 };
+#endif
+
+
+MP_DEFINE_CONST_OBJ_TYPE(
+    keypad_eventqueue_type,
+    MP_QSTR_EventQueue,
+    MP_TYPE_FLAG_HAS_SPECIAL_ACCESSORS,
+    unary_op, keypad_eventqueue_unary_op,
+    #if MICROPY_PY_SELECT
+    protocol, &eventqueue_p,
+    #endif
+    locals_dict, &keypad_eventqueue_locals_dict
+    );

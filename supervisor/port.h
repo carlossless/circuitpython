@@ -1,35 +1,14 @@
-/*
- * This file is part of the MicroPython project, http://micropython.org/
- *
- * The MIT License (MIT)
- *
- * Copyright (c) 2016-2017 Scott Shawcroft for Adafruit Industries
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
- */
+// This file is part of the CircuitPython project: https://circuitpython.org
+//
+// SPDX-FileCopyrightText: Copyright (c) 2016-2017 Scott Shawcroft for Adafruit Industries
+//
+// SPDX-License-Identifier: MIT
 
-#ifndef MICROPY_INCLUDED_SUPERVISOR_PORT_H
-#define MICROPY_INCLUDED_SUPERVISOR_PORT_H
+#pragma once
 
-#include "py/mpconfig.h"
+#include <stdbool.h>
+#include <stddef.h>
 
-#include "supervisor/memory.h"
 #include "supervisor/shared/safe_mode.h"
 
 // Provided by the linker;
@@ -57,9 +36,6 @@ uint32_t *port_stack_get_limit(void);
 
 // Get stack top address
 uint32_t *port_stack_get_top(void);
-
-// True if stack is not located inside heap (at the top)
-bool port_has_fixed_stack(void);
 
 // Get heap bottom address
 uint32_t *port_heap_get_bottom(void);
@@ -90,17 +66,45 @@ void port_interrupt_after_ticks(uint32_t ticks);
 // may not be a system level sleep.
 void port_idle_until_interrupt(void);
 
-// Execute port specific actions during background tasks.
+// Execute port specific actions during background tick. Only if ticks are enabled.
+void port_background_tick(void);
+
+// Execute port specific actions during background tasks. This is before the
+// background callback system and happens *very* often. Use
+// port_background_tick() when possible.
 void port_background_task(void);
 
-// Take port specific actions at the beginning and end of background tasks.
+// Take port specific actions at the beginning and end of background ticks.
 // This is used e.g., to set a monitoring pin for debug purposes.  "Actual
-// work" should be done in port_background_task() instead.
-void port_start_background_task(void);
-void port_finish_background_task(void);
+// work" should be done in port_background_tick() instead.
+void port_start_background_tick(void);
+void port_finish_background_tick(void);
+
+// Some ports need special handling to wake the main task from another task. The
+// port must implement the necessary code in this function.  A default weak
+// implementation is provided that does nothing.
+void port_wake_main_task(void);
 
 // Some ports need special handling to wake the main task from an interrupt
-// context or other task.  The port must implement the necessary code in this
-// function.  A default weak implementation is provided that does nothing.
-void port_wake_main_task(void);
-#endif  // MICROPY_INCLUDED_SUPERVISOR_PORT_H
+// context.  The port must implement the necessary code in this function.  A
+// default weak implementation is provided that does nothing.
+void port_wake_main_task_from_isr(void);
+
+// Some ports may use real RTOS tasks besides the background task framework of
+// CircuitPython. Calling this will yield to other tasks and then return to the
+// CircuitPython task when others are done.
+void port_yield(void);
+
+// Some ports need special handling just after completing boot.py execution.
+// This function is called once while boot.py's VM is still valid, and
+// then a second time after the VM is finalized.
+// A default weak implementation is provided that does nothing.
+void port_post_boot_py(bool heap_valid);
+
+// Some ports want to add information to boot_out.txt.
+// A default weak implementation is provided that does nothing.
+void port_boot_info(void);
+
+// Some ports want to mark additional pointers as gc roots.
+// A default weak implementation is provided that does nothing.
+void port_gc_collect(void);

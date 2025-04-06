@@ -1,3 +1,8 @@
+// This file is part of the CircuitPython project: https://circuitpython.org
+//
+// SPDX-FileCopyrightText: Copyright (c) 2020 by kvc0/WarriorOfWire
+//
+// SPDX-License-Identifier: MIT
 
 #include "stdlib.h"
 
@@ -91,10 +96,12 @@ static void _get_screen_area(vectorio_vector_shape_t *self, displayio_area_t *ou
         x = self->absolute_transform->x + self->absolute_transform->dx * self->y;
         y = self->absolute_transform->y + self->absolute_transform->dy * self->x;
         if (self->absolute_transform->dx < 1) {
+            x -= 1;
             out_area->y1 = out_area->y1 * -1 + 1;
             out_area->y2 = out_area->y2 * -1 + 1;
         }
         if (self->absolute_transform->dy < 1) {
+            y -= 1;
             out_area->x1 = out_area->x1 * -1 + 1;
             out_area->x2 = out_area->x2 * -1 + 1;
         }
@@ -104,10 +111,12 @@ static void _get_screen_area(vectorio_vector_shape_t *self, displayio_area_t *ou
         y = self->absolute_transform->y + self->absolute_transform->dy * self->y;
 
         if (self->absolute_transform->dx < 1) {
+            x -= 1;
             out_area->x1 = out_area->x1 * -1 + 1;
             out_area->x2 = out_area->x2 * -1 + 1;
         }
         if (self->absolute_transform->dy < 1) {
+            y -= 1;
             out_area->y1 = out_area->y1 * -1 + 1;
             out_area->y2 = out_area->y2 * -1 + 1;
         }
@@ -127,11 +136,12 @@ static void screen_to_shape_coordinates(vectorio_vector_shape_t *self, uint16_t 
         VECTORIO_SHAPE_PIXEL_DEBUG(" a(%3d, %3d)", *out_shape_x, *out_shape_y);
         if (self->absolute_transform->dx < 1) {
             *out_shape_y *= -1;
+            *out_shape_y -= 1;
         }
         if (self->absolute_transform->dy < 1) {
             *out_shape_x *= -1;
+            *out_shape_x -= 1;
         }
-        VECTORIO_SHAPE_PIXEL_DEBUG(" b(%3d, %3d)", *out_shape_x, *out_shape_y);
     } else {
         *out_shape_x = x - self->absolute_transform->x - self->absolute_transform->dx * self->x;
         *out_shape_y = y - self->absolute_transform->y - self->absolute_transform->dy * self->y;
@@ -139,12 +149,12 @@ static void screen_to_shape_coordinates(vectorio_vector_shape_t *self, uint16_t 
         VECTORIO_SHAPE_PIXEL_DEBUG(" a(%3d, %3d)", *out_shape_x, *out_shape_y);
         if (self->absolute_transform->dx < 1) {
             *out_shape_x *= -1;
+            *out_shape_x -= 1;
         }
         if (self->absolute_transform->dy < 1) {
             *out_shape_y *= -1;
+            *out_shape_y -= 1;
         }
-        VECTORIO_SHAPE_PIXEL_DEBUG(" b(%3d, %3d)", *out_shape_x, *out_shape_y);
-
         // It's mirrored via dx. Maybe we need to add support for also separately mirroring?
         // if (self->absolute_transform->mirror_x) {
         //     pixel_to_get_x = (shape_area.x2 - shape_area.x1) - (pixel_to_get_x - shape_area.x1) + shape_area.x1 - 1;
@@ -153,6 +163,7 @@ static void screen_to_shape_coordinates(vectorio_vector_shape_t *self, uint16_t 
         //     pixel_to_get_y = (shape_area.y2 - shape_area.y1) - (pixel_to_get_y - shape_area.y1) + +shape_area.y1 - 1;
         // }
     }
+    VECTORIO_SHAPE_PIXEL_DEBUG(" b(%3d, %3d)", *out_shape_x, *out_shape_y);
 }
 
 static void check_bounds_and_set_x(vectorio_vector_shape_t *self, mp_int_t x) {
@@ -277,12 +288,8 @@ void common_hal_vectorio_vector_shape_set_location(vectorio_vector_shape_t *self
     mp_obj_tuple_get(xy, &tuple_len, &tuple_items);
     mp_arg_validate_length(tuple_len, 2, MP_QSTR_location);
 
-    mp_int_t x;
-    mp_int_t y;
-    if (!mp_obj_get_int_maybe(tuple_items[ 0 ], &x)
-        || !mp_obj_get_int_maybe(tuple_items[ 1 ], &y)) {
-        mp_raise_ValueError_varg(translate("unsupported %q type"), MP_QSTR_point);
-    }
+    mp_int_t x = mp_arg_validate_type_int(tuple_items[0], MP_QSTR_x);
+    mp_int_t y = mp_arg_validate_type_int(tuple_items[1], MP_QSTR_y);
     bool dirty = false;
     if (self->x != x) {
         check_bounds_and_set_x(self, x);
@@ -297,6 +304,16 @@ void common_hal_vectorio_vector_shape_set_location(vectorio_vector_shape_t *self
     }
 }
 
+mp_int_t common_hal_vectorio_vector_shape_get_hidden(vectorio_vector_shape_t *self) {
+    VECTORIO_SHAPE_DEBUG("%p get_hidden\n", self);
+    return self->hidden;
+}
+
+void common_hal_vectorio_vector_shape_set_hidden(vectorio_vector_shape_t *self, bool hidden) {
+    VECTORIO_SHAPE_DEBUG("%p set_hidden %d\n", self, x);
+    self->hidden = hidden;
+    common_hal_vectorio_vector_shape_set_dirty(self);
+}
 
 mp_obj_t common_hal_vectorio_vector_shape_get_pixel_shader(vectorio_vector_shape_t *self) {
     VECTORIO_SHAPE_DEBUG("%p get_pixel_shader\n", self);
@@ -319,6 +336,11 @@ bool vectorio_vector_shape_fill_area(vectorio_vector_shape_t *self, const _displ
     uint64_t start = common_hal_time_monotonic_ns();
     uint64_t pixel_time = 0;
     #endif
+
+    if (self->hidden) {
+        return false;
+    }
+
     VECTORIO_SHAPE_DEBUG("%p fill_area: fill: {(%5d,%5d), (%5d,%5d)}",
         self,
         area->x1, area->y1, area->x2, area->y2
@@ -395,7 +417,7 @@ bool vectorio_vector_shape_fill_area(vectorio_vector_shape_t *self, const _displ
                 if (self->pixel_shader == mp_const_none) {
                     output_pixel.pixel = input_pixel.pixel;
                 } else if (mp_obj_is_type(self->pixel_shader, &displayio_palette_type)) {
-                    output_pixel.opaque = displayio_palette_get_color(self->pixel_shader, colorspace, input_pixel.pixel, &output_pixel.pixel);
+                    displayio_palette_get_color(self->pixel_shader, colorspace, &input_pixel, &output_pixel);
                 } else if (mp_obj_is_type(self->pixel_shader, &displayio_colorconverter_type)) {
                     displayio_colorconverter_convert(self->pixel_shader, colorspace, &input_pixel, &output_pixel);
                 }

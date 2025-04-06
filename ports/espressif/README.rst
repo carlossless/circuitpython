@@ -1,4 +1,4 @@
-CircuitPython on Espressif SoCs
+Espressif
 =======================================
 
 This port adds the Espressif line of SoCs to CircuitPython.
@@ -9,9 +9,14 @@ Support Status:
 .. csv-table::
     :header: SoC, Status
 
+    ESP32, "beta"
+    ESP32-H2, "alpha"
+    ESP32-C2, "alpha"
     ESP32-C3, "beta"
+    ESP32-C6, "alpha"
+    ESP32-P4, "alpha"
     ESP32-S2, "stable"
-    ESP32-S3, "beta"
+    ESP32-S3, "stable"
 
 How this port is organized:
 ---------------------------------------
@@ -20,12 +25,16 @@ How this port is organized:
 - **boards/** contains the configuration files for each development board and breakout available on the port.
 - **common-hal/** contains the port-specific module implementations, used by shared-module and shared-bindings.
 - **esp-idf/** contains the Espressif IoT Development Framework installation, including all the drivers for the port.
-- **modules/** contains information specific to certain Espressif SoC based hardware modules, such as the pins used for flash and RAM on the WROVER and WROOM.
 - **peripherals/** contains peripheral setup files and peripheral mapping information, sorted by family and sub-variant. Most files in this directory can be generated with the python scripts in **tools/**.
 - **supervisor/** contains port-specific implementations of internal flash, serial and USB, as well as the **port.c** file, which initializes the port at startup.
 - **tools/** includes useful Python scripts for debugging and other purposes.
 
 At the root level, refer to **mpconfigboard.h** and **mpconfigport.mk** for port specific settings and a list of enabled CircuitPython modules.
+
+Connecting to the ESP32
+---------------------------------------
+The ESP32 chip itself has no USB support. On many boards there is a USB-serial adapter chip, such as a CP2102N, CP2104 or CH9102F, usually connected to the ESP32 TXD0 (GPIO1)and RXD0 (GPIO3) pins, for access to the bootloader. CircuitPython also uses this serial channel for the REPL.
+
 
 Connecting to the ESP32-C3
 ---------------------------------------
@@ -50,7 +59,7 @@ Connect these pins using a `USB adapter <https://www.adafruit.com/product/4090>`
 
 **UART Connection:**
 
-A `USB to UART convertor <https://www.adafruit.com/product/3309>`_ can be used for connecting to ESP32-C3 to get access to the serial console and REPL and for flashing CircuitPython.
+A `USB to UART converter <https://www.adafruit.com/product/3309>`_ can be used for connecting to ESP32-C3 to get access to the serial console and REPL and for flashing CircuitPython.
 
 The following connections need to be made in this case:
 
@@ -87,7 +96,7 @@ Connect these pins using a `USB adapter <https://www.adafruit.com/product/4090>`
 
 **UART Connection:**
 
-A `USB to UART convertor <https://www.adafruit.com/product/3309>`_ can be used for connecting to ESP32-S2 to get access to the serial console and REPL and for flashing CircuitPython.
+A `USB to UART converter <https://www.adafruit.com/product/3309>`_ can be used for connecting to ESP32-S2 to get access to the serial console and REPL and for flashing CircuitPython.
 
 The following connections need to be made in this case:
 
@@ -124,7 +133,7 @@ Connect these pins using a `USB adapter <https://www.adafruit.com/product/4090>`
 
 **UART Connection:**
 
-A `USB to UART convertor <https://www.adafruit.com/product/3309>`_ can be used for connecting to ESP32-S3 to get access to the serial console and REPL and for flashing CircuitPython.
+A `USB to UART converter <https://www.adafruit.com/product/3309>`_ can be used for connecting to ESP32-S3 to get access to the serial console and REPL and for flashing CircuitPython.
 
 The following connections need to be made in this case:
 
@@ -147,6 +156,8 @@ Before building or flashing the, you must `install the ESP-IDF <https://docs.esp
 
 Note: This must be re-done every time the ESP-IDF is updated, but not every time you build.
 
+Note: The ``./esp-idf/install.sh`` script is part of a submodule. Please refer to the `Building CircuitPython Learn Guide <https://learn.adafruit.com/building-circuitpython>`_ for instructions about using ``make fetch-port-submodules``.
+
 Run ``cd ports/espressif`` from ``circuitpython/`` to move to the espressif port root, and run:
 
 .. code-block::
@@ -161,7 +172,7 @@ Run ``cd ports/espressif`` from ``circuitpython/`` to move to the espressif port
 
 .. code-block::
 
-    ./esp-idf/export.sh
+    source ./esp-idf/export.sh
 
 When CircuitPython updates the ESP-IDF to a new release, you may need to run this installation process again. The exact commands used may also vary based on your shell environment.
 

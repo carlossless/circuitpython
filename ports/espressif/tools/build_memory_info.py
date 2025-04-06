@@ -6,15 +6,23 @@
 # SPDX-License-Identifier: MIT
 
 import csv
+import json
 import os
-import re
 import sys
 
 from elftools.elf.elffile import ELFFile
 
-print()
 
 internal_memory = {
+    "esp32": [
+        # Name, Start, Length
+        ("RTC Fast Memory", (0x3FF8_0000, 0x400C_0000), 8 * 1024),
+        ("RTC Slow Memory", (0x5000_0000,), 8 * 1024),
+        # First 64kB of Internal SRAM 0 can be configured as cached, and starts at 0x4007_0000
+        ("Internal SRAM 0", (0x4008_0000,), 128 * 1024),
+        ("Internal SRAM 1", (0x3FFE_0000, 0x400A_0000), 128 * 1024),
+        ("Internal SRAM 2", (0x3FFA_E000,), 200 * 1024),
+    ],
     "esp32s2": [
         # Name, Start, Length
         ("RTC Fast Memory", (0x3FF9_E000, 0x4007_0000), 8 * 1024),
@@ -30,11 +38,33 @@ internal_memory = {
         ("Internal SRAM 1", (0x3FC8_0000, 0x4037_8000), 416 * 1024),
         ("Internal SRAM 2", (0x3FCF_0000,), 64 * 1024),
     ],
+    "esp32p4": [
+        # Name, Start, Length
+        ("HP RAM", (0x3010_0000,), 8 * 1024),
+        ("PSRAM", (0x4800_0000,), 64 * 1024 * 1024),
+        ("L2MEM", (0x4FF0_0000,), 768 * 1024),
+        ("LP RAM", (0x5010_8000,), 32 * 1024),
+    ],
+    "esp32c2": [
+        # Name, Start, Length
+        ("Internal SRAM 0", (0x4037_C000,), 16 * 1024),
+        ("Internal SRAM 1", (0x3FCA_0000, 0x4038_0000), 256 * 1024),
+    ],
     "esp32c3": [
         # Name, Start, Length
         ("RTC Fast Memory", (0x5000_0000,), 8 * 1024),
         ("Internal SRAM 0", (0x4037_C000,), 16 * 1024),
         ("Internal SRAM 1", (0x3FC8_0000, 0x4038_0000), 384 * 1024),
+    ],
+    "esp32c6": [
+        # Name, Start, Length
+        ("LP SRAM", (0x5000_0000,), 16 * 1024),
+        ("HP SRAM", (0x4080_0000,), 512 * 1024),
+    ],
+    "esp32h2": [
+        # Name, Start, Length
+        ("LP SRAM", (0x5000_0000,), 4 * 1024),
+        ("HP SRAM", (0x4080_0000,), 320 * 1024),
     ],
 }
 
@@ -65,7 +95,9 @@ with open(sys.argv[2], "r") as f:
                 ota = None
                 app = None
                 for partition in csv.reader(f):
-                    if partition[0][0] == "#":
+                    if not partition:  # empty row
+                        continue
+                    if partition[0].startswith("#"):
                         continue
                     subtype = partition[2].strip()
                     if subtype == "factory":
@@ -73,9 +105,12 @@ with open(sys.argv[2], "r") as f:
                     elif subtype == "ota_0":
                         ota = partition[4].strip()
                 size = app if ota is None else ota
-                if size[-1] not in ("k", "K"):
-                    raise RuntimeError("Unhandled partition size suffix")
-                firmware_region = int(size[:-1]) * 1024
+                if size[-1] in ("k", "K"):
+                    firmware_region = int(size[:-1]) * 1024
+                elif size[-1] in ("m", "M"):
+                    firmware_region = int(size[:-1]) * 1024 * 1024
+                else:
+                    raise RuntimeError("Unhandled partition size suffix:", size[-1])
 
 regions = dict((name, 0) for name, _, _ in internal_memory[target])
 
@@ -87,6 +122,9 @@ with open(sys.argv[1], "rb") as stream:
         size = section["sh_size"]
         offset = section["sh_offset"]
         if not size or not start:
+            continue
+        if section.name.endswith("dummy"):
+            # print("Skipping dummy section", section.name)
             continue
         # This handles sections that span two memory regions, not more than that.
         # print(start, size, offset, section.name)
@@ -105,8 +143,12 @@ with open(sys.argv[1], "rb") as stream:
 
 # This file is the bin
 used_flash = os.stat(sys.argv[3]).st_size
-
 free_flash = firmware_region - used_flash
+
+with open(f"{sys.argv[4]}/firmware.size.json", "w") as f:
+    json.dump({"used_flash": used_flash, "firmware_region": firmware_region}, f)
+
+print()
 print(
     "{:7} bytes used, {:7} bytes free in flash firmware space out of {} bytes ({}kB).".format(
         used_flash, free_flash, firmware_region, firmware_region / 1024

@@ -3,7 +3,7 @@
  *
  * The MIT License (MIT)
  *
- * SPDX-FileCopyrightText: Copyright (c) 2013-2016 Damien P. George
+ * Copyright (c) 2013-2016 Damien P. George
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -26,10 +26,22 @@
 #ifndef MICROPY_INCLUDED_LIB_UTILS_INTERRUPT_CHAR_H
 #define MICROPY_INCLUDED_LIB_UTILS_INTERRUPT_CHAR_H
 
+// CIRCUITPY-CHANGE
 #include <stdbool.h>
+
+#ifdef __ZEPHYR__
+#include <zephyr/kernel.h>
+
+// This semaphore is released when an interrupt character is seen. Core CP code
+// can wait for this release but shouldn't take it. They should return instead
+// after cancelling what they were doing.
+extern struct k_sem mp_interrupt_sem;
+#endif
+
 
 extern int mp_interrupt_char;
 void mp_hal_set_interrupt_char(int c);
+// CIRCUITPY-CHANGE
 bool mp_hal_is_interrupted(void);
 
 #endif // MICROPY_INCLUDED_LIB_UTILS_INTERRUPT_CHAR_H

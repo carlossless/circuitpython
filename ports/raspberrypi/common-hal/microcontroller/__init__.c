@@ -1,28 +1,8 @@
-/*
- * This file is part of the MicroPython project, http://micropython.org/
- *
- * The MIT License (MIT)
- *
- * Copyright (c) 2021 Scott Shawcroft for Adafruit Industries
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
- */
+// This file is part of the CircuitPython project: https://circuitpython.org
+//
+// SPDX-FileCopyrightText: Copyright (c) 2021 Scott Shawcroft for Adafruit Industries
+//
+// SPDX-License-Identifier: MIT
 
 #include "py/mphal.h"
 #include "py/obj.h"
@@ -38,18 +18,19 @@
 #include "supervisor/filesystem.h"
 #include "supervisor/port.h"
 #include "supervisor/shared/safe_mode.h"
-#include "supervisor/shared/translate/translate.h"
 
-#include "src/rp2040/hardware_structs/include/hardware/structs/sio.h"
-#include "src/rp2_common/hardware_sync/include/hardware/sync.h"
+#include "hardware/structs/sio.h"
+#include "hardware/sync.h"
 
 #include "hardware/watchdog.h"
+#include "hardware/irq.h"
 
 void common_hal_mcu_delay_us(uint32_t delay) {
     mp_hal_delay_us(delay);
 }
 
 volatile uint32_t nesting_count = 0;
+#ifdef PICO_RP2040
 void common_hal_mcu_disable_interrupts(void) {
     // We don't use save_and_disable_interrupts() from the sdk because we don't want to worry about PRIMASK.
     // This is what we do on the SAMD21 via CMSIS.
@@ -60,7 +41,7 @@ void common_hal_mcu_disable_interrupts(void) {
 
 void common_hal_mcu_enable_interrupts(void) {
     if (nesting_count == 0) {
-        // reset_into_safe_mode(LOCKING_ERROR);
+        // reset_into_safe_mode(SAFE_MODE_INTERRUPT_ERROR);
     }
     nesting_count--;
     if (nesting_count > 0) {
@@ -69,6 +50,40 @@ void common_hal_mcu_enable_interrupts(void) {
     __dmb();
     asm volatile ("cpsie i" : : : "memory");
 }
+#else
+#include "RP2350.h"
+#define PICO_ELEVATED_IRQ_PRIORITY (0x60) // between PICO_DEFAULT and PIOCO_HIGHEST_IRQ_PRIORITY
+static uint32_t oldBasePri = 0; // 0 (default) masks nothing, other values mask equal-or-larger priority values
+void common_hal_mcu_disable_interrupts(void) {
+    uint32_t my_interrupts = save_and_disable_interrupts();
+    if (nesting_count == 0) {
+        // We must keep DMA_IRQ_1 (reserved for pico dvi) enabled at all times,
+        // including during flash writes. Do this by setting the priority mask (BASEPRI
+        // register).
+        // grab old base priority
+        oldBasePri = __get_BASEPRI();
+        // and set the new one
+        __set_BASEPRI_MAX(PICO_ELEVATED_IRQ_PRIORITY);
+        __isb(); // Instruction synchronization barrier
+    }
+    nesting_count++;
+    restore_interrupts(my_interrupts);
+}
+
+void common_hal_mcu_enable_interrupts(void) {
+    uint32_t my_interrupts = save_and_disable_interrupts();
+    if (nesting_count == 0) {
+        reset_into_safe_mode(SAFE_MODE_INTERRUPT_ERROR);
+    }
+    nesting_count--;
+    if (nesting_count == 0) {
+        // return to the old priority setting
+        __set_BASEPRI(oldBasePri);
+        __isb(); // Instruction synchronization barrier
+    }
+    restore_interrupts(my_interrupts);
+}
+#endif
 
 static bool next_reset_to_bootloader = false;
 
@@ -79,7 +94,7 @@ void common_hal_mcu_on_next_reset(mcu_runmode_t runmode) {
             next_reset_to_bootloader = true;
             break;
         case RUNMODE_SAFE_MODE:
-            safe_mode_on_next_reset(PROGRAMMATIC_SAFE_MODE);
+            safe_mode_on_next_reset(SAFE_MODE_PROGRAMMATIC);
             break;
         default:
             break;
@@ -149,7 +164,7 @@ watchdog_watchdogtimer_obj_t common_hal_mcu_watchdogtimer_obj = {
 #endif
 
 // This maps MCU pin names to pin objects.
-const mp_rom_map_elem_t mcu_pin_global_dict_table[TOTAL_GPIO_COUNT] = {
+const mp_rom_map_elem_t mcu_pin_global_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_GPIO0), MP_ROM_PTR(&pin_GPIO0) },
     { MP_ROM_QSTR(MP_QSTR_GPIO1), MP_ROM_PTR(&pin_GPIO1) },
     { MP_ROM_QSTR(MP_QSTR_GPIO2), MP_ROM_PTR(&pin_GPIO2) },
@@ -173,12 +188,53 @@ const mp_rom_map_elem_t mcu_pin_global_dict_table[TOTAL_GPIO_COUNT] = {
     { MP_ROM_QSTR(MP_QSTR_GPIO20), MP_ROM_PTR(&pin_GPIO20) },
     { MP_ROM_QSTR(MP_QSTR_GPIO21), MP_ROM_PTR(&pin_GPIO21) },
     { MP_ROM_QSTR(MP_QSTR_GPIO22), MP_ROM_PTR(&pin_GPIO22) },
+    #if !defined(IGNORE_GPIO23)
     { MP_ROM_QSTR(MP_QSTR_GPIO23), MP_ROM_PTR(&pin_GPIO23) },
+    #endif
+    #if !defined(IGNORE_GPIO24)
     { MP_ROM_QSTR(MP_QSTR_GPIO24), MP_ROM_PTR(&pin_GPIO24) },
+    #endif
+    #if !defined(IGNORE_GPIO25)
     { MP_ROM_QSTR(MP_QSTR_GPIO25), MP_ROM_PTR(&pin_GPIO25) },
+    #endif
     { MP_ROM_QSTR(MP_QSTR_GPIO26), MP_ROM_PTR(&pin_GPIO26) },
     { MP_ROM_QSTR(MP_QSTR_GPIO27), MP_ROM_PTR(&pin_GPIO27) },
     { MP_ROM_QSTR(MP_QSTR_GPIO28), MP_ROM_PTR(&pin_GPIO28) },
     { MP_ROM_QSTR(MP_QSTR_GPIO29), MP_ROM_PTR(&pin_GPIO29) },
+    #if NUM_BANK0_GPIOS == 48
+    { MP_ROM_QSTR(MP_QSTR_GPIO30), MP_ROM_PTR(&pin_GPIO30) },
+    { MP_ROM_QSTR(MP_QSTR_GPIO31), MP_ROM_PTR(&pin_GPIO31) },
+    { MP_ROM_QSTR(MP_QSTR_GPIO32), MP_ROM_PTR(&pin_GPIO32) },
+    { MP_ROM_QSTR(MP_QSTR_GPIO33), MP_ROM_PTR(&pin_GPIO33) },
+    { MP_ROM_QSTR(MP_QSTR_GPIO34), MP_ROM_PTR(&pin_GPIO34) },
+    { MP_ROM_QSTR(MP_QSTR_GPIO35), MP_ROM_PTR(&pin_GPIO35) },
+    { MP_ROM_QSTR(MP_QSTR_GPIO36), MP_ROM_PTR(&pin_GPIO36) },
+    { MP_ROM_QSTR(MP_QSTR_GPIO37), MP_ROM_PTR(&pin_GPIO37) },
+    { MP_ROM_QSTR(MP_QSTR_GPIO38), MP_ROM_PTR(&pin_GPIO38) },
+    { MP_ROM_QSTR(MP_QSTR_GPIO39), MP_ROM_PTR(&pin_GPIO39) },
+    { MP_ROM_QSTR(MP_QSTR_GPIO40), MP_ROM_PTR(&pin_GPIO40) },
+    { MP_ROM_QSTR(MP_QSTR_GPIO41), MP_ROM_PTR(&pin_GPIO41) },
+    { MP_ROM_QSTR(MP_QSTR_GPIO42), MP_ROM_PTR(&pin_GPIO42) },
+    { MP_ROM_QSTR(MP_QSTR_GPIO43), MP_ROM_PTR(&pin_GPIO43) },
+    { MP_ROM_QSTR(MP_QSTR_GPIO44), MP_ROM_PTR(&pin_GPIO44) },
+    { MP_ROM_QSTR(MP_QSTR_GPIO45), MP_ROM_PTR(&pin_GPIO45) },
+    { MP_ROM_QSTR(MP_QSTR_GPIO46), MP_ROM_PTR(&pin_GPIO46) },
+    { MP_ROM_QSTR(MP_QSTR_GPIO47), MP_ROM_PTR(&pin_GPIO47) },
+    #endif
+    #if CIRCUITPY_CYW43
+    { MP_ROM_QSTR(MP_QSTR_CYW0), MP_ROM_PTR(&pin_CYW0) },
+    { MP_ROM_QSTR(MP_QSTR_CYW1), MP_ROM_PTR(&pin_CYW1) },
+    { MP_ROM_QSTR(MP_QSTR_CYW2), MP_ROM_PTR(&pin_CYW2) },
+    #endif
 };
 MP_DEFINE_CONST_DICT(mcu_pin_globals, mcu_pin_global_dict_table);
+
+const mcu_pin_obj_t *mcu_get_pin_by_number(int number) {
+    for (size_t i = 0; i < MP_ARRAY_SIZE(mcu_pin_global_dict_table); i++) {
+        mcu_pin_obj_t *obj = MP_OBJ_TO_PTR(mcu_pin_global_dict_table[i].value);
+        if (obj->base.type == &mcu_pin_type && obj->number == number) {
+            return obj;
+        }
+    }
+    return NULL;
+}

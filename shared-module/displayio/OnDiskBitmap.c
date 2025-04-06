@@ -1,28 +1,9 @@
-/*
- * This file is part of the Micro Python project, http://micropython.org/
- *
- * The MIT License (MIT)
- *
- * Copyright (c) 2018 Scott Shawcroft for Adafruit Industries
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
- */
+// This file is part of the CircuitPython project: https://circuitpython.org
+//
+// SPDX-FileCopyrightText: Copyright (c) 2018 Scott Shawcroft for Adafruit Industries
+// SPDX-FileCopyrightText: Copyright (c) 2025 SamantazFox
+//
+// SPDX-License-Identifier: MIT
 
 #include "shared-bindings/displayio/OnDiskBitmap.h"
 #include "shared-bindings/displayio/ColorConverter.h"
@@ -35,6 +16,11 @@
 #include "py/mperrno.h"
 #include "py/runtime.h"
 
+
+#define DISPLAYIO_ODBMP_DEBUG(...) (void)0
+// #define DISPLAYIO_ODBMP_DEBUG(...) mp_printf(&mp_plat_print __VA_OPT__(,) __VA_ARGS__)
+
+
 static uint32_t read_word(uint16_t *bmp_header, uint16_t index) {
     return bmp_header[index] | bmp_header[index + 1] << 16;
 }
@@ -45,34 +31,63 @@ void common_hal_displayio_ondiskbitmap_construct(displayio_ondiskbitmap_t *self,
     uint16_t bmp_header[69];
     f_rewind(&self->file->fp);
     UINT bytes_read;
-    if (f_read(&self->file->fp, bmp_header, 138, &bytes_read) != FR_OK) {
+
+    // Read the minimum amount of bytes required to parse a BITMAPCOREHEADER.
+    // If needed, we will read more bytes down below.
+    if (f_read(&self->file->fp, bmp_header, 26, &bytes_read) != FR_OK) {
         mp_raise_OSError(MP_EIO);
     }
-    if (bytes_read != 138 ||
-        memcmp(bmp_header, "BM", 2) != 0) {
+    DISPLAYIO_ODBMP_DEBUG("bytes_read: %d\n", bytes_read);
+    if (bytes_read != 26 || memcmp(bmp_header, "BM", 2) != 0) {
         mp_arg_error_invalid(MP_QSTR_file);
+    }
+
+    // Read header size to determine if more header bytes needs to be read.
+    uint32_t header_size = read_word(bmp_header, 7);
+    DISPLAYIO_ODBMP_DEBUG("header_size: %d\n", header_size);
+
+    if (header_size == 40 || header_size == 108 || header_size == 124) {
+        // Read the remaining header bytes
+        if (f_read(&self->file->fp, bmp_header + 13, header_size - 12, &bytes_read) != FR_OK) {
+            mp_raise_OSError(MP_EIO);
+        }
+        DISPLAYIO_ODBMP_DEBUG("bytes_read: %d\n", bytes_read);
+        if (bytes_read != (header_size - 12)) {
+            mp_arg_error_invalid(MP_QSTR_file);
+        }
+    } else if (header_size != 12) {
+        mp_raise_ValueError_varg(MP_ERROR_TEXT("Only Windows format, uncompressed BMP supported: given header size is %d"), header_size);
+    }
+
+
+    uint32_t compression = read_word(bmp_header, 15);
+    DISPLAYIO_ODBMP_DEBUG("compression: %d\n", compression);
+
+    // 0 is uncompressed; 3 is bitfield compressed. 1 and 2 are RLE compression.
+    if (compression != 0 && compression != 3) {
+        mp_raise_ValueError(MP_ERROR_TEXT("RLE-compressed BMP not supported"));
     }
 
     // We can't cast because we're not aligned.
     self->data_offset = read_word(bmp_header, 5);
 
-    uint32_t header_size = read_word(bmp_header, 7);
-    uint16_t bits_per_pixel = bmp_header[14];
-    uint32_t compression = read_word(bmp_header, 15);
-    uint32_t number_of_colors = read_word(bmp_header, 23);
-
-    bool indexed = bits_per_pixel <= 8;
     self->bitfield_compressed = (compression == 3);
-    self->bits_per_pixel = bits_per_pixel;
+    self->bits_per_pixel = bmp_header[14];
     self->width = read_word(bmp_header, 9);
     self->height = read_word(bmp_header, 11);
 
-    displayio_colorconverter_t *colorconverter = m_new_obj(displayio_colorconverter_t);
-    colorconverter->base.type = &displayio_colorconverter_type;
+    DISPLAYIO_ODBMP_DEBUG("data offset: %d\n", self->data_offset);
+    DISPLAYIO_ODBMP_DEBUG("width: %d\n", self->width);
+    DISPLAYIO_ODBMP_DEBUG("height: %d\n", self->height);
+    DISPLAYIO_ODBMP_DEBUG("bpp: %d\n", self->bits_per_pixel);
+
+
+    displayio_colorconverter_t *colorconverter =
+        mp_obj_malloc(displayio_colorconverter_t, &displayio_colorconverter_type);
     common_hal_displayio_colorconverter_construct(colorconverter, false, DISPLAYIO_COLORSPACE_RGB888);
     self->colorconverter = colorconverter;
 
-    if (bits_per_pixel == 16) {
+    if (self->bits_per_pixel == 16) {
         if (((header_size >= 56)) || (self->bitfield_compressed)) {
             self->r_bitmask = read_word(bmp_header, 27);
             self->g_bitmask = read_word(bmp_header, 29);
@@ -83,20 +98,23 @@ void common_hal_displayio_ondiskbitmap_construct(displayio_ondiskbitmap_t *self,
             self->g_bitmask = 0x3e0;
             self->b_bitmask = 0x1f;
         }
-    } else if (indexed) {
+    } else if (self->bits_per_pixel <= 8) { // indexed
+        uint32_t number_of_colors = 0;
+        if (header_size >= 40) {
+            number_of_colors = read_word(bmp_header, 23);
+        }
         if (number_of_colors == 0) {
-            number_of_colors = 1 << bits_per_pixel;
+            number_of_colors = 1 << self->bits_per_pixel;
         }
 
-        displayio_palette_t *palette = m_new_obj(displayio_palette_t);
-        palette->base.type = &displayio_palette_type;
-        common_hal_displayio_palette_construct(palette, number_of_colors);
+        displayio_palette_t *palette = mp_obj_malloc(displayio_palette_t, &displayio_palette_type);
+        common_hal_displayio_palette_construct(palette, number_of_colors, false);
 
         if (number_of_colors > 1) {
             uint16_t palette_size = number_of_colors * sizeof(uint32_t);
             uint16_t palette_offset = 0xe + header_size;
 
-            uint32_t *palette_data = m_malloc(palette_size, false);
+            uint32_t *palette_data = m_malloc(palette_size);
 
             f_rewind(&self->file->fp);
             f_lseek(&self->file->fp, palette_offset);
@@ -106,24 +124,22 @@ void common_hal_displayio_ondiskbitmap_construct(displayio_ondiskbitmap_t *self,
                 mp_raise_OSError(MP_EIO);
             }
             if (palette_bytes_read != palette_size) {
-                mp_raise_ValueError(translate("Unable to read color palette data"));
+                mp_raise_ValueError(MP_ERROR_TEXT("Unable to read color palette data"));
             }
             for (uint16_t i = 0; i < number_of_colors; i++) {
                 common_hal_displayio_palette_set_color(palette, i, palette_data[i]);
             }
+
+            #if MICROPY_MALLOC_USES_ALLOCATED_SIZE
+            m_free(palette_data, palette_size);
+            #else
             m_free(palette_data);
+            #endif
         } else {
             common_hal_displayio_palette_set_color(palette, 0, 0x0);
             common_hal_displayio_palette_set_color(palette, 1, 0xffffff);
         }
         self->palette = palette;
-
-    } else if (!(header_size == 12 || header_size == 40 || header_size == 108 || header_size == 124)) {
-        mp_raise_ValueError_varg(translate("Only Windows format, uncompressed BMP supported: given header size is %d"), header_size);
-    }
-
-    if (bits_per_pixel == 8 && number_of_colors == 0) {
-        mp_raise_ValueError_varg(translate("Only monochrome, indexed 4bpp or 8bpp, and 16bpp or greater BMPs supported: %d bpp given"), bits_per_pixel);
     }
 
     uint8_t bytes_per_pixel = (self->bits_per_pixel / 8)  ? (self->bits_per_pixel / 8) : 1;

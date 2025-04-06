@@ -19,10 +19,30 @@ The workflow APIs are documented here.
 These USB interfaces are enabled by default on boards with USB support. They are usable once the
 device has been plugged into a host.
 
-### CIRCUITPY drive
+### Mass Storage
 CircuitPython exposes a standard mass storage (MSC) interface to enable file manipulation over a
-standard interface. This interface works underneath the file system at the block level so using it
-excludes other types of workflows from manipulating the file system at the same time.
+standard interface. (This is how USB drives work.) This interface works underneath the file system at
+the block level so using it excludes other types of workflows from manipulating the file system at
+the same time.
+
+CircuitPython 10.x adds multiple Logical Units (LUNs) to the mass storage interface. This allows for
+multiple drives to be accessed and ejected independently.
+
+#### CIRCUITPY drive
+The CIRCUITPY drive is the main drive that CircuitPython uses. It is writable by the host by default
+and read-only to CircuitPython. `storage.remount()` can be used to remount the drive to
+CircuitPython as read-write.
+
+#### CPSAVES drive
+The board may also expose a CPSAVES drive. (This is based on the ``CIRCUITPY_SAVES_PARTITION_SIZE``
+setting in ``mpconfigboard.h``.) It is a portion of the main flash that is writable by CircuitPython
+by default. It is read-only to the host. `storage.remount()` can be used to remount the drive to the
+host as read-write.
+
+#### SD card drive
+A few boards have SD card automounting. (This is based on the ``DEFAULT_SD`` settings in
+``mpconfigboard.h``.) The card is writable from CircuitPython by default and read-only to the host.
+`storage.remount()` can be used to remount the drive to the host as read-write.
 
 ### CDC serial
 CircuitPython exposes one CDC USB interface for CircuitPython serial. This is a standard serial
@@ -35,7 +55,7 @@ a reset into bootloader.)
 
 ## BLE
 
-The BLE workflow is enabled for nRF boards. By default, to prevent malicious access, it is disabled.
+The BLE workflow is enabled for Nordic boards. By default, to prevent malicious access, it is disabled.
 To connect to the BLE workflow, press the reset button while the status led blinks blue quickly
 after the safe mode blinks. The board will restart and broadcast the file transfer service UUID
 (`0xfebb`) along with the board's [Creation IDs](https://github.com/creationid/creators). This
@@ -44,6 +64,10 @@ device will need to pair and bond. Once bonded, the device will broadcast whenev
 using a rotating key rather than a static one. Non-bonded devices won't be able to resolve it. After
 connection, the central device can discover two default services. One for file transfer and one for
 CircuitPython specifically that includes serial characteristics.
+
+To change the default BLE advertising name without (or before) running user code, the desired name
+can be put in the `settings.toml` file. The key is `CIRCUITPY_BLE_NAME`. It's limited to approximately
+30 characters depending on the port's settings and will be truncated if longer.
 
 ### File Transfer API
 
@@ -64,26 +88,36 @@ conflicts with user created NUS services.
 Read-only characteristic that returns the UTF-8 encoded version string.
 
 ## Web
+If the keys `CIRCUITPY_WIFI_SSID` and `CIRCUITPY_WIFI_PASSWORD` are set in `settings.toml`,
+CircuitPython will automatically connect to the given Wi-Fi network on boot and upon reload.
 
-The web workflow is depends on adding Wi-Fi credentials into the `/.env` file. The keys are
-`CIRCUITPY_WIFI_SSID` and `CIRCUITPY_WIFI_PASSWORD`. Once these are defined, CircuitPython will
-automatically connect to the network and start the webserver used for the workflow. The webserver
-is on port 80. It also enables MDNS.
+If `CIRCUITPY_WEB_API_PASSWORD` is set, MDNS and the http server for the web workflow will also start.
 
-Here is an example `/.env`:
+The webserver is on port 80 unless overridden by `CIRCUITPY_WEB_API_PORT`. It also enables MDNS.
+The name of the board as advertised to the network can be overridden by `CIRCUITPY_WEB_INSTANCE_NAME`.
+
+Here is an example `/settings.toml`:
 
 ```bash
 # To auto-connect to Wi-Fi
-CIRCUITPY_WIFI_SSID='scottswifi'
-CIRCUITPY_WIFI_PASSWORD='secretpassword'
+CIRCUITPY_WIFI_SSID="scottswifi"
+CIRCUITPY_WIFI_PASSWORD="secretpassword"
 
-# To enable modifying files from the web. Change this too!
-CIRCUITPY_WEB_API_PASSWORD='passw0rd'
+# To enable the web workflow. Change this too!
+# Leave the User field blank in the browser.
+CIRCUITPY_WEB_API_PASSWORD="passw0rd"
+
+CIRCUITPY_WEB_API_PORT=80
+CIRCUITPY_WEB_INSTANCE_NAME=""
 ```
 
 MDNS is used to resolve [`circuitpython.local`](http://circuitpython.local) to a device specific
 hostname of the form `cpy-XXXXXX.local`. The `XXXXXX` is based on network MAC address. The device
 also provides the MDNS service with service type `_circuitpython` and protocol `_tcp`.
+
+Since port 80 (or the port assigned to `CIRCUITPY_WEB_API_PORT`) is used for web workflow, the `mdns`
+[module](https://docs.circuitpython.org/en/latest/shared-bindings/mdns/index.html#mdns.Server.advertise_service)
+can't advertise an additional service on that port.
 
 ### HTTP
 The web server is HTTP 1.1 and may use chunked responses so that it doesn't need to precompute
@@ -115,9 +149,9 @@ The web server will allow requests from `cpy-XXXXXX.local`, `127.0.0.1`, the dev
 ### File REST API
 All file system related APIs are protected by HTTP basic authentication. It is *NOT* secure but will
 hopefully prevent some griefing in shared settings. The password is sent unencrypted so do not reuse
-a password with something important.
+a password with something important. The user field is left blank.
 
-The password is taken from `/.env` with the key `CIRCUITPY_WEB_API_PASSWORD`. If this is unset, the
+The password is taken from `settings.toml` with the key `CIRCUITPY_WEB_API_PASSWORD`. If this is unset, the
 server will respond with `403 Forbidden`. When a password is set, but not provided in a request, it
 will respond `401 Unauthorized`.
 
@@ -131,7 +165,7 @@ root will be returned.
 When requested with the `OPTIONS` method, the server will respond with CORS related headers. Most
 aren't needed for API use. They are there for the web browser.
 
-* `Access-Control-Allow-Methods` - Varies with USB state. `GET, OPTIONS` when USB is active. `GET, OPTIONS, PUT, DELETE` otherwise.
+* `Access-Control-Allow-Methods` - Varies with USB state. `GET, OPTIONS` when USB is active. `GET, OPTIONS, PUT, DELETE, MOVE` otherwise.
 
 Example:
 
@@ -150,6 +184,13 @@ Returns a JSON representation of the directory.
 * `403 Forbidden` - No `CIRCUITPY_WEB_API_PASSWORD` set
 * `404 Not Found` - Missing directory
 
+Returns directory information:
+* `free`: Count of free blocks on the disk holding this directory.
+* `total`: Total blocks that make up the disk holding this directory.
+* `block_size`: Size of a block in bytes.
+* `writable`: True when CircuitPython and the web workflow can write to the disk. USB may claim a disk instead.
+* `files`: Array of objects. One for each file.
+
 Returns information about each file in the directory:
 
 * `name` - File name. No trailing `/` on directory names
@@ -164,14 +205,20 @@ curl -v -u :passw0rd -H "Accept: application/json" -L --location-trusted http://
 ```
 
 ```json
-[
-	{
-		"name": "world.txt",
-		"directory": false,
-		"modified_ns": 946934328000000000,
-		"file_size": 12
-	}
-]
+{
+	"free": 451623,
+	"total": 973344,
+	"block_size": 32768,
+	"writable": true,
+	"files": [
+		{
+			"name": "world.txt",
+			"directory": false,
+			"modified_ns": 946934328000000000,
+			"file_size": 12
+		}
+	]
+}
 ```
 
 ##### PUT
@@ -181,7 +228,7 @@ time resolution) used for the directories modification time. The RTC time will u
 
 Returns:
 
-* `204 No Content` - Directory exists
+* `204 No Content` - Directory or file exists
 * `201 Created` - Directory created
 * `401 Unauthorized` - Incorrect password
 * `403 Forbidden` - No `CIRCUITPY_WEB_API_PASSWORD` set
@@ -193,6 +240,24 @@ Example:
 
 ```sh
 curl -v -u :passw0rd -X PUT -L --location-trusted http://circuitpython.local/fs/lib/hello/world/
+```
+
+##### Move
+Moves the directory at the given path to ``X-Destination``. Also known as rename.
+
+The custom `X-Destination` header stores the destination path of the directory.
+
+* `201 Created` - Directory renamed
+* `401 Unauthorized` - Incorrect password
+* `403 Forbidden` - No `CIRCUITPY_WEB_API_PASSWORD` set
+* `404 Not Found` - Source directory not found or destination path is missing
+* `409 Conflict` - USB is active and preventing file system modification
+* `412 Precondition Failed` - The destination path is already in use
+
+Example:
+
+```sh
+curl -v -u :passw0rd -X MOVE -H "X-Destination: /fs/lib/hello2/" -L --location-trusted http://circuitpython.local/fs/lib/hello/
 ```
 
 ##### DELETE
@@ -207,7 +272,7 @@ Deletes the directory and all of its contents.
 Example:
 
 ```sh
-curl -v -u :passw0rd -X DELETE -L --location-trusted http://circuitpython.local/fs/lib/hello/world/
+curl -v -u :passw0rd -X DELETE -L --location-trusted http://circuitpython.local/fs/lib/hello2/world/
 ```
 
 
@@ -263,6 +328,25 @@ curl -v -u :passw0rd -L --location-trusted http://circuitpython.local/fs/lib/hel
 ```
 
 
+##### Move
+Moves the file at the given path to the ``X-Destination``. Also known as rename.
+
+The custom `X-Destination` header stores the destination path of the file.
+
+* `201 Created` - File renamed
+* `401 Unauthorized` - Incorrect password
+* `403 Forbidden` - No `CIRCUITPY_WEB_API_PASSWORD` set
+* `404 Not Found` - Source file not found or destination path is missing
+* `409 Conflict` - USB is active and preventing file system modification
+* `412 Precondition Failed` - The destination path is already in use
+
+Example:
+
+```sh
+curl -v -u :passw0rd -X MOVE -H "X-Destination: /fs/lib/hello/world2.txt" -L --location-trusted http://circuitpython.local/fs/lib/hello/world.txt
+```
+
+
 ##### DELETE
 Deletes the file.
 
@@ -276,7 +360,7 @@ Deletes the file.
 Example:
 
 ```sh
-curl -v -u :passw0rd -X DELETE -L --location-trusted http://circuitpython.local/fs/lib/hello/world.txt
+curl -v -u :passw0rd -X DELETE -L --location-trusted http://circuitpython.local/fs/lib/hello/world2.txt
 ```
 
 ### `/cp/`
@@ -286,11 +370,74 @@ not protected by basic auth in case the device is someone elses.
 
 Only `GET` requests are supported and will return `405 Method Not Allowed` otherwise.
 
+#### `/cp/devices.json`
+
+Returns information about other devices found on the network using MDNS.
+
+* `total`: Total MDNS response count. May be more than in `devices` if internal limits were hit.
+* `devices`: List of discovered devices.
+	* `hostname`: MDNS hostname
+	* `instance_name`: MDNS instance name. Defaults to human readable board name.
+	* `port`: Port of CircuitPython Web API
+	* `ip`: IP address
+
+Example:
+```sh
+curl -v -L http://circuitpython.local/cp/devices.json
+```
+
+```json
+{
+	"total": 1,
+	"devices": [
+		{
+			"hostname": "cpy-951032",
+			"instance_name": "Adafruit Feather ESP32-S2 TFT",
+			"port": 80,
+			"ip": "192.168.1.235"
+		}
+	]
+}
+```
+
+#### `/cp/diskinfo.json`
+
+Returns information about the attached disk(s). A list of objects, one per disk.
+
+* `root`: Filesystem path to the root of the disk.
+* `free`: Count of free blocks on the disk.
+* `total`: Total blocks that make up the disk.
+* `block_size`: Size of a block in bytes.
+* `writable`: True when CircuitPython and the web workflow can write to the disk. USB may claim a disk instead.
+
+Example:
+```sh
+curl -v -L http://circuitpython.local/cp/diskinfo.json
+```
+
+```json
+[{
+	"root": "/",
+	"free": 2964992,
+	"block_size": 512,
+	"writable": true,
+	"total": 2967552
+}]
+```
+
+#### `/cp/serial/`
+
+
+Serves a basic serial terminal program when a `GET` request is received without the
+`Upgrade: websocket` header. Otherwise the socket is upgraded to a WebSocket. See WebSockets below for more detail.
+
+This is an authenticated endpoint in both modes.
+
 #### `/cp/version.json`
 
 Returns information about the device.
 
-* `web_api_version`: Always `1`. This versions the rest of the API and new versions may not be backwards compatible.
+* `web_api_version`: Between `1` and `4`. This versions the rest of the API and new versions may not be backwards compatible. See below for more info.
 * `version`: CircuitPython build version.
 * `build_date`: CircuitPython build date.
 * `board_name`: Human readable name of the board.
@@ -323,35 +470,11 @@ curl -v -L http://circuitpython.local/cp/version.json
 }
 ```
 
-#### `/cp/devices.json`
+#### `/code/`
 
-Returns information about other devices found on the network using MDNS.
-
-* `total`: Total MDNS response count. May be more than in `devices` if internal limits were hit.
-* `devices`: List of discovered devices.
-	* `hostname`: MDNS hostname
-	* `instance_name`: MDNS instance name. Defaults to human readable board name.
-	* `port`: Port of CircuitPython Web API
-	* `ip`: IP address
-
-Example:
-```sh
-curl -v -L http://circuitpython.local/cp/devices.json
-```
-
-```json
-{
-	"total": 1,
-	"devices": [
-		{
-			"hostname": "cpy-951032",
-			"instance_name": "Adafruit Feather ESP32-S2 TFT",
-			"port": 80,
-			"ip": "192.168.1.235"
-		}
-	]
-}
-```
+The `/code/` page returns a small static html page that will pull in and load the full code editor from
+[code.circuitpython.org](https://code.circuitpython.org) for a full code editor experience. Because most
+of the resources reside online instead of the device, an active internet connection is required.
 
 ### Static files
 
@@ -361,4 +484,20 @@ curl -v -L http://circuitpython.local/cp/devices.json
 
 ### WebSocket
 
-Coming soon!
+The CircuitPython serial interactions are available over a WebSocket. A WebSocket begins as a
+special HTTP request that gets upgraded to a WebSocket. Authentication happens before upgrading.
+
+WebSockets are *not* bare sockets once upgraded. Instead they have their own framing format for data.
+CircuitPython can handle PING and CLOSE opcodes. All others are treated as TEXT. Data to
+CircuitPython is expected to be masked UTF-8, as the spec requires. Data from CircuitPython to the
+client is unmasked. It is also unbuffered so the client will get a variety of frame sizes.
+
+Only one WebSocket at a time is supported.
+
+### Versions
+
+* `1` - Initial version.
+* `2` - Added `/cp/diskinfo.json`.
+* `3` - Changed `/cp/diskinfo.json` to return a list in preparation for multi-disk support.
+* `4` - Changed directory json to an object with additional data. File list is under `files` and is
+  the same as the old format.

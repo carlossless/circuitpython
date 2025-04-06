@@ -104,26 +104,148 @@ c_file = args.output_c_file
 c_file.write(
     """\
 
+#include "shared-bindings/displayio/Bitmap.h"
 #include "shared-bindings/displayio/Palette.h"
 #include "supervisor/shared/display.h"
 
 """
 )
 
+
 c_file.write(
     """\
+#if CIRCUITPY_REPL_LOGO
+"""
+)
+if tile_y == 16:
+    blinka_size = 16
+    c_file.write(
+        """\
+const uint32_t blinka_bitmap_data[32] = {
+    0x11000000, 0x00000011,
+    0x11010000, 0x00001053,
+    0x11010000, 0x00001156,
+    0x11010000, 0x00001411,
+    0x11010000, 0x00200020,
+    0x11000000, 0x00000013,
+    0x01000000, 0x00002011,
+    0x00000000, 0x00003311,
+    0x00000000, 0x00201201,
+    0x11110000, 0x00301344,
+    0x23230300, 0x00221124,
+    0x14111100, 0x00331144,
+    0x32323200, 0x00221134,
+    0x44111111, 0x00334444,
+    0x11111111, 0x01441411,
+    0x23232323, 0x10111121
+};
+"""
+    )
+else:
+    blinka_size = 12
+    c_file.write(
+        """\
+const uint32_t blinka_bitmap_data[28] = {
+    0x11010000, 0x00000000,
+    0x53110000, 0x00000010,
+    0x56110000, 0x00000011,
+    0x11110000, 0x00000014,
+    0x12010000, 0x00002000,
+    0x11000000, 0x00000030,
+    0x11000000, 0x00000020,
+    0x44110100, 0x00000013,
+    0x24232300, 0x00000012,
+    0x44141101, 0x00000013,
+    0x34323232, 0x00000112,
+    0x44111111, 0x00001044
+};
+"""
+    )
+
+c_file.write(
+    """\
+const displayio_bitmap_t blinka_bitmap = {{
+    .base = {{.type = &displayio_bitmap_type }},
+    .width = {0},
+    .height = {0},
+    .data = (uint32_t*) blinka_bitmap_data,
+    .stride = 2,
+    .bits_per_value = 4,
+    .x_shift = 1,
+    .x_mask = 0x01,
+    .bitmask = 0x0f,
+    .read_only = true
+}};
+
+_displayio_color_t blinka_colors[7] = {{
+    {{
+        .rgb888 = 0x000000,
+        .transparent = true
+    }},
+    {{ // Purple
+        .rgb888 = 0x8428bc
+    }},
+    {{ // Pink
+        .rgb888 = 0xff89bc
+    }},
+    {{ // Light blue
+        .rgb888 = 0x7beffe
+    }},
+    {{ // Dark purple
+        .rgb888 = 0x51395f
+    }},
+    {{ // White
+        .rgb888 = 0xffffff
+    }},
+    {{ // Dark Blue
+        .rgb888 = 0x0736a0
+    }},
+}};
+
+displayio_palette_t blinka_palette = {{
+    .base = {{.type = &displayio_palette_type }},
+    .colors = blinka_colors,
+    .color_count = 7,
+    .needs_refresh = false
+}};
+
+displayio_tilegrid_t supervisor_blinka_sprite = {{
+    .base = {{.type = &displayio_tilegrid_type }},
+    .bitmap = (displayio_bitmap_t*) &blinka_bitmap,
+    .pixel_shader = &blinka_palette,
+    .x = 0,
+    .y = 0,
+    .pixel_width = {0},
+    .pixel_height = {0},
+    .bitmap_width_in_tiles = 1,
+    .width_in_tiles = 1,
+    .height_in_tiles = 1,
+    .tile_width = {0},
+    .tile_height = {0},
+    .top_left_x = {0},
+    .top_left_y = {0},
+    .tiles = 0,
+    .partial_change = false,
+    .full_change = false,
+    .hidden = false,
+    .hidden_by_parent = false,
+    .moved = false,
+    .inline_tiles = true,
+    .in_group = true
+}};
+#endif
+""".format(blinka_size)
+)
+
+c_file.write(
+    """\
+#if CIRCUITPY_TERMINALIO
 _displayio_color_t terminal_colors[2] = {
     {
-        .rgb888 = 0x000000,
-        .rgb565 = 0x0000,
-        .luma = 0x00,
-        .chroma = 0
+        .rgb888 = 0x000000
     },
     {
-        .rgb888 = 0xffffff,
-        .rgb565 = 0xffff,
-        .luma = 0xff,
-        .chroma = 0
+        .rgb888 = 0xffffff
     },
 };
 
@@ -161,14 +283,12 @@ displayio_tilegrid_t supervisor_terminal_scroll_area_text_grid = {{
     .inline_tiles = false,
     .in_group = true
 }};
-""".format(
-        len(all_characters), tile_x, tile_y
-    )
+""".format(len(all_characters), tile_x, tile_y)
 )
 
 c_file.write(
     """\
-displayio_tilegrid_t supervisor_terminal_title_bar_text_grid = {{
+displayio_tilegrid_t supervisor_terminal_status_bar_text_grid = {{
     .base = {{ .type = &displayio_tilegrid_type }},
     .bitmap = (displayio_bitmap_t*) &supervisor_terminal_font_bitmap,
     .pixel_shader = &supervisor_terminal_color,
@@ -191,20 +311,16 @@ displayio_tilegrid_t supervisor_terminal_title_bar_text_grid = {{
     .inline_tiles = false,
     .in_group = true
 }};
-""".format(
-        len(all_characters), tile_x, tile_y
-    )
+""".format(len(all_characters), tile_x, tile_y)
 )
 
 c_file.write(
     """\
 const uint32_t font_bitmap_data[{}] = {{
-""".format(
-        bytes_per_row * tile_y // 4
-    )
+""".format(bytes_per_row * tile_y // 4)
 )
 
-for i, word in enumerate(struct.iter_unpack(">I", b)):
+for i, word in enumerate(struct.iter_unpack("<I", b)):
     c_file.write("0x{:08x}, ".format(word[0]))
     if (i + 1) % (bytes_per_row // 4) == 0:
         c_file.write("\n")
@@ -224,14 +340,12 @@ displayio_bitmap_t supervisor_terminal_font_bitmap = {{
     .data = (uint32_t*) font_bitmap_data,
     .stride = {},
     .bits_per_value = 1,
-    .x_shift = 5,
-    .x_mask = 0x1f,
-    .bitmask = 0x1,
+    .x_shift = 3,
+    .x_mask = 0x07,
+    .bitmask = 0x01,
     .read_only = true
 }};
-""".format(
-        len(all_characters) * tile_x, tile_y, bytes_per_row / 4
-    )
+""".format(len(all_characters) * tile_x, tile_y, bytes_per_row / 4)
 )
 
 
@@ -245,20 +359,20 @@ const fontio_builtinfont_t supervisor_terminal_font = {{
     .unicode_characters = (const uint8_t*) "{}",
     .unicode_characters_len = {}
 }};
-""".format(
-        tile_x, tile_y, extra_characters, len(extra_characters.encode("utf-8"))
-    )
+""".format(tile_x, tile_y, extra_characters, len(extra_characters.encode("utf-8")))
 )
 
 c_file.write(
     """\
 terminalio_terminal_obj_t supervisor_terminal = {
     .base = { .type = &terminalio_terminal_type },
-    .font = &supervisor_terminal_font,
+    .font = MP_OBJ_FROM_PTR(&supervisor_terminal_font),
     .cursor_x = 0,
     .cursor_y = 0,
     .scroll_area = NULL,
-    .title_bar = NULL
+    .status_bar = NULL
 };
+
+#endif
 """
 )

@@ -1,41 +1,21 @@
-/*
- * This file is part of the MicroPython project, http://micropython.org/
- *
- * The MIT License (MIT)
- *
- * Copyright (c) 2019 Dan Halbert for Adafruit Industries
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
- */
+// This file is part of the CircuitPython project: https://circuitpython.org
+//
+// SPDX-FileCopyrightText: Copyright (c) 2019 Dan Halbert for Adafruit Industries
+//
+// SPDX-License-Identifier: MIT
 
 // This file contains settings that are common across CircuitPython ports, to make
 // sure that the same feature set and settings are used, such as in atmel-samd
-// and nrf.
+// and nordic.
 
-#ifndef __INCLUDED_MPCONFIG_CIRCUITPY_H
-#define __INCLUDED_MPCONFIG_CIRCUITPY_H
+#pragma once
 
 #include <stdint.h>
 #include <stdatomic.h>
 
 // This is CircuitPython.
-#define CIRCUITPY 1
+// Always 1: defined in circuitpy_mpconfig.mk
+// #define CIRCUITPY (1)
 
 // REPR_C encodes qstrs, 31-bit ints, and 30-bit floats in a single 32-bit word.
 #ifndef MICROPY_OBJ_REPR
@@ -54,12 +34,23 @@ extern void common_hal_mcu_enable_interrupts(void);
 #define MICROPY_BEGIN_ATOMIC_SECTION() (common_hal_mcu_disable_interrupts(), 0)
 #define MICROPY_END_ATOMIC_SECTION(state) ((void)state, common_hal_mcu_enable_interrupts())
 
+// MicroPython-only options not used by CircuitPython, but present in various files
+// inherited from MicroPython, especially in extmod/
+#define MICROPY_ENABLE_DYNRUNTIME        (0)
+#define MICROPY_HW_ENABLE_USB_RUNTIME_DEVICE (0)
+#define MICROPY_PY_BLUETOOTH             (0)
+#define MICROPY_PY_LWIP_SLIP             (0)
+#define MICROPY_PY_OS_DUPTERM            (0)
+#define MICROPY_ROM_TEXT_COMPRESSION     (0)
+#define MICROPY_VFS_LFS1                 (0)
+#define MICROPY_VFS_LFS2                 (0)
+
 // Sorted alphabetically for easy finding.
 //
 // default is 128; consider raising to reduce fragmentation.
 #define MICROPY_ALLOC_PARSE_CHUNK_INIT   (16)
-// default is 512.
-#define MICROPY_ALLOC_PATH_MAX           (256)
+// default is 512. Longest path in .py bundle as of June 6th, 2023 is 73 characters.
+#define MICROPY_ALLOC_PATH_MAX           (96)
 #define MICROPY_CAN_OVERRIDE_BUILTINS    (1)
 #define MICROPY_COMP_CONST               (1)
 #define MICROPY_COMP_DOUBLE_TUPLE_ASSIGN (1)
@@ -72,30 +63,39 @@ extern void common_hal_mcu_enable_interrupts(void);
 #define MICROPY_ENABLE_DOC_STRING        (0)
 #define MICROPY_ENABLE_FINALISER         (1)
 #define MICROPY_ENABLE_GC                (1)
+#define MICROPY_ENABLE_PYSTACK           (1)
+#define MICROPY_TRACKED_ALLOC            (CIRCUITPY_SSL_MBEDTLS)
 #define MICROPY_ENABLE_SOURCE_LINE       (1)
 #define MICROPY_EPOCH_IS_1970            (1)
-#define MICROPY_ERROR_REPORTING          (MICROPY_ERROR_REPORTING_NORMAL)
+#define MICROPY_ERROR_REPORTING          (CIRCUITPY_FULL_BUILD ? MICROPY_ERROR_REPORTING_NORMAL : MICROPY_ERROR_REPORTING_TERSE)
 #define MICROPY_FLOAT_HIGH_QUALITY_HASH  (0)
 #define MICROPY_FLOAT_IMPL               (MICROPY_FLOAT_IMPL_FLOAT)
 #define MICROPY_GC_ALLOC_THRESHOLD       (0)
+#define MICROPY_GC_SPLIT_HEAP            (1)
+#define MICROPY_GC_SPLIT_HEAP_AUTO       (1)
+#define MP_PLAT_ALLOC_HEAP(size) port_malloc(size, false)
+#define MP_PLAT_FREE_HEAP(ptr) port_free(ptr)
+#include "supervisor/port_heap.h"
 #define MICROPY_HELPER_LEXER_UNIX        (0)
 #define MICROPY_HELPER_REPL              (1)
 #define MICROPY_KBD_EXCEPTION            (1)
 #define MICROPY_MEM_STATS                (0)
 #define MICROPY_MODULE_BUILTIN_INIT      (1)
+#define MICROPY_MODULE_BUILTIN_SUBPACKAGES (1)
 #define MICROPY_NONSTANDARD_TYPECODES    (0)
 #define MICROPY_OPT_COMPUTED_GOTO        (1)
 #define MICROPY_OPT_COMPUTED_GOTO_SAVE_SPACE (CIRCUITPY_COMPUTED_GOTO_SAVE_SPACE)
 #define MICROPY_OPT_LOAD_ATTR_FAST_PATH  (CIRCUITPY_OPT_LOAD_ATTR_FAST_PATH)
 #define MICROPY_OPT_MAP_LOOKUP_CACHE  (CIRCUITPY_OPT_MAP_LOOKUP_CACHE)
+#define MICROPY_OPT_MPZ_BITWISE          (0)
 #define MICROPY_OPT_CACHE_MAP_LOOKUP_IN_BYTECODE (CIRCUITPY_OPT_CACHE_MAP_LOOKUP_IN_BYTECODE)
 #define MICROPY_PERSISTENT_CODE_LOAD     (1)
 
-#define MICROPY_PY_ARRAY                 (1)
+#define MICROPY_PY_ARRAY                 (CIRCUITPY_ARRAY)
 #define MICROPY_PY_ARRAY_SLICE_ASSIGN    (1)
 #define MICROPY_PY_ATTRTUPLE             (1)
-
 #define MICROPY_PY_BUILTINS_BYTEARRAY    (1)
+#define MICROPY_PY_BUILTINS_BYTES_HEX    (1)
 #define MICROPY_PY_BUILTINS_ENUMERATE    (1)
 #define MICROPY_PY_BUILTINS_FILTER       (1)
 #define MICROPY_PY_BUILTINS_HELP         (1)
@@ -112,28 +112,38 @@ extern void common_hal_mcu_enable_interrupts(void);
 #define MICROPY_PY_BUILTINS_SLICE_INDICES (1)
 #define MICROPY_PY_BUILTINS_STR_UNICODE  (1)
 
+#define MICROPY_PY_BINASCII             (CIRCUITPY_BINASCII)
+#define MICROPY_PY_BINASCII_CRC32       (CIRCUITPY_BINASCII && CIRCUITPY_ZLIB)
 #define MICROPY_PY_CMATH                 (0)
-#define MICROPY_PY_COLLECTIONS           (1)
+#define MICROPY_PY_COLLECTIONS           (CIRCUITPY_COLLECTIONS)
 #define MICROPY_PY_DESCRIPTORS           (1)
-#define MICROPY_PY_IO_FILEIO             (1)
+// In extmod
+#define MICROPY_PY_ERRNO                (CIRCUITPY_ERRNO)
+// Uses about 80 bytes.
+#define MICROPY_PY_ERRNO_ERRORCODE      (CIRCUITPY_ERRNO)
 #define MICROPY_PY_GC                    (1)
 // Supplanted by shared-bindings/math
+#define MICROPY_PY_IO                    (CIRCUITPY_IO)
+#define MICROPY_PY_IO_IOBASE             (CIRCUITPY_IO_IOBASE)
+// In extmod
+#define MICROPY_PY_JSON                 (CIRCUITPY_JSON)
 #define MICROPY_PY_MATH                  (0)
 #define MICROPY_PY_MICROPYTHON_MEM_INFO  (0)
+// Supplanted by shared-bindings/random
+#define MICROPY_PY_RANDOM               (0)
+#define MICROPY_PY_RANDOM_EXTRA_FUNCS   (0)
+#define MICROPY_PY_RE                   (CIRCUITPY_RE)
 // Supplanted by shared-bindings/struct
 #define MICROPY_PY_STRUCT                (0)
-#define MICROPY_PY_SYS                   (1)
+#define MICROPY_PY_SYS                   (CIRCUITPY_SYS)
 #define MICROPY_PY_SYS_MAXSIZE           (1)
 #define MICROPY_PY_SYS_STDFILES          (1)
-// Supplanted by shared-bindings/random
-#define MICROPY_PY_URANDOM               (0)
-#define MICROPY_PY_URANDOM_EXTRA_FUNCS   (0)
+#define MICROPY_PY_UCTYPES               (0)
 #define MICROPY_PY___FILE__              (1)
 
 #define MICROPY_QSTR_BYTES_IN_HASH       (1)
 #define MICROPY_REPL_AUTO_INDENT         (1)
 #define MICROPY_REPL_EVENT_DRIVEN        (0)
-#define MICROPY_ENABLE_PYSTACK           (1)
 #define MICROPY_STACK_CHECK              (1)
 #define MICROPY_STREAMS_NON_BLOCK        (1)
 #ifndef MICROPY_USE_INTERNAL_PRINTF
@@ -193,15 +203,15 @@ typedef long mp_off_t;
 #define mp_type_fileio mp_type_vfs_fat_fileio
 #define mp_type_textio mp_type_vfs_fat_textio
 
-#define mp_import_stat mp_vfs_import_stat
 #define mp_builtin_open_obj mp_vfs_open_obj
 
 
 // extra built in names to add to the global namespace
+// Not indented so as not to confused the editor.
 #define MICROPY_PORT_BUILTINS \
-    { MP_OBJ_NEW_QSTR(MP_QSTR_help), (mp_obj_t)&mp_builtin_help_obj }, \
+    { MP_OBJ_NEW_QSTR(MP_QSTR_help), (mp_obj_t)&mp_builtin_help_obj },      \
     { MP_OBJ_NEW_QSTR(MP_QSTR_input), (mp_obj_t)&mp_builtin_input_obj }, \
-    { MP_OBJ_NEW_QSTR(MP_QSTR_open), (mp_obj_t)&mp_builtin_open_obj },
+    { MP_OBJ_NEW_QSTR(MP_QSTR_open), (mp_obj_t)&mp_builtin_open_obj },   \
 
 //////////////////////////////////////////////////////////////////////////////////////////////////
 // board-specific definitions, which control and may override definitions below.
@@ -209,34 +219,64 @@ typedef long mp_off_t;
 
 // Turning off FULL_BUILD removes some functionality to reduce flash size on tiny SAMD21s
 #define MICROPY_BUILTIN_METHOD_CHECK_SELF_ARG (CIRCUITPY_FULL_BUILD)
+
 #ifndef MICROPY_CPYTHON_COMPAT
 #define MICROPY_CPYTHON_COMPAT                (CIRCUITPY_FULL_BUILD)
 #endif
+
+#ifndef MICROPY_CPYTHON_EXCEPTION_CHAIN
+#define MICROPY_CPYTHON_EXCEPTION_CHAIN       (CIRCUITPY_FULL_BUILD)
+#endif
+
 #define MICROPY_PY_BUILTINS_POW3              (CIRCUITPY_BUILTINS_POW3)
 #define MICROPY_PY_FSTRINGS                   (1)
 #define MICROPY_MODULE_WEAK_LINKS             (0)
 #define MICROPY_PY_ALL_SPECIAL_METHODS        (CIRCUITPY_FULL_BUILD)
+
 #ifndef MICROPY_PY_BUILTINS_COMPLEX
 #define MICROPY_PY_BUILTINS_COMPLEX           (CIRCUITPY_FULL_BUILD)
 #endif
+
 #define MICROPY_PY_BUILTINS_FROZENSET         (CIRCUITPY_FULL_BUILD)
+
+#ifndef MICROPY_PY_BUILTINS_NOTIMPLEMENTED
+#define MICROPY_PY_BUILTINS_NOTIMPLEMENTED    (CIRCUITPY_FULL_BUILD)
+#endif
+
 #define MICROPY_PY_BUILTINS_STR_CENTER        (CIRCUITPY_FULL_BUILD)
 #define MICROPY_PY_BUILTINS_STR_PARTITION     (CIRCUITPY_FULL_BUILD)
 #define MICROPY_PY_BUILTINS_STR_SPLITLINES    (CIRCUITPY_FULL_BUILD)
+
 #ifndef MICROPY_PY_COLLECTIONS_ORDEREDDICT
 #define MICROPY_PY_COLLECTIONS_ORDEREDDICT    (CIRCUITPY_FULL_BUILD)
 #endif
+
 #ifndef MICROPY_PY_COLLECTIONS_DEQUE
 #define MICROPY_PY_COLLECTIONS_DEQUE          (CIRCUITPY_FULL_BUILD)
+#define MICROPY_PY_COLLECTIONS_DEQUE_ITER     (CIRCUITPY_FULL_BUILD)
+#define MICROPY_PY_COLLECTIONS_DEQUE_SUBSCR   (CIRCUITPY_FULL_BUILD)
 #endif
-#define MICROPY_PY_URE_MATCH_GROUPS           (CIRCUITPY_RE)
-#define MICROPY_PY_URE_MATCH_SPAN_START_END   (CIRCUITPY_RE)
-#define MICROPY_PY_URE_SUB                    (CIRCUITPY_RE)
+
+#ifndef MICROPY_PY_FUNCTION_ATTRS
+#define MICROPY_PY_FUNCTION_ATTRS            (CIRCUITPY_FULL_BUILD)
+#endif
+
+#ifndef MICROPY_PY_REVERSE_SPECIAL_METHODS
+#define MICROPY_PY_REVERSE_SPECIAL_METHODS   (CIRCUITPY_FULL_BUILD)
+#endif
+
+#define MICROPY_PY_RE_MATCH_GROUPS           (CIRCUITPY_RE)
+#define MICROPY_PY_RE_MATCH_SPAN_START_END   (CIRCUITPY_RE)
+#define MICROPY_PY_RE_SUB                    (CIRCUITPY_RE)
 
 #define CIRCUITPY_MICROPYTHON_ADVANCED        (0)
 
 #ifndef MICROPY_FATFS_EXFAT
 #define MICROPY_FATFS_EXFAT           (CIRCUITPY_FULL_BUILD)
+#endif
+
+#ifndef MICROPY_FATFS_MKFS_FAT32
+#define MICROPY_FATFS_MKFS_FAT32           (CIRCUITPY_FULL_BUILD)
 #endif
 
 // LONGINT_IMPL_xxx are defined in the Makefile.
@@ -259,7 +299,7 @@ typedef long mp_off_t;
 #define MICROPY_PY_REVERSE_SPECIAL_METHODS    (CIRCUITPY_ULAB || CIRCUITPY_FULL_BUILD)
 #endif
 
-#if INTERNAL_FLASH_FILESYSTEM == 0 && QSPI_FLASH_FILESYSTEM == 0 && SPI_FLASH_FILESYSTEM == 0 && !DISABLE_FILESYSTEM
+#if !defined(__ZEPHYR__) && INTERNAL_FLASH_FILESYSTEM == 0 && QSPI_FLASH_FILESYSTEM == 0 && SPI_FLASH_FILESYSTEM == 0 && !DISABLE_FILESYSTEM
 #error No *_FLASH_FILESYSTEM set!
 #endif
 
@@ -287,13 +327,37 @@ typedef long mp_off_t;
 #if defined(DEFAULT_UART_BUS_TX) && defined(DEFAULT_UART_BUS_RX)
 #define CIRCUITPY_BOARD_UART        (1)
 #define CIRCUITPY_BOARD_UART_PIN    {{.tx = DEFAULT_UART_BUS_TX, .rx = DEFAULT_UART_BUS_RX}}
-#define BOARD_UART_ROOT_POINTER     mp_obj_t board_uart_bus;
 #else
 #define CIRCUITPY_BOARD_UART        (0)
-#define BOARD_UART_ROOT_POINTER
+#endif
+#endif
+
+
+#if MICROPY_PY_ASYNC_AWAIT && !CIRCUITPY_TRACEBACK
+#error CIRCUITPY_ASYNCIO requires CIRCUITPY_TRACEBACK
+#endif
+
+#if defined(CIRCUITPY_CONSOLE_UART_RX) || defined(CIRCUITPY_CONSOLE_UART_TX)
+#if !(defined(CIRCUITPY_CONSOLE_UART_RX) && defined(CIRCUITPY_CONSOLE_UART_TX))
+#error Both CIRCUITPY_CONSOLE_UART_RX and CIRCUITPY_CONSOLE_UART_TX must be defined if one is defined.
+#endif
+#define CIRCUITPY_CONSOLE_UART (1)
+#ifndef CIRCUITPY_CONSOLE_UART_BAUDRATE
+#define CIRCUITPY_CONSOLE_UART_BAUDRATE (115200)
+#if !defined(CIRCUITPY_CONSOLE_UART_PRINTF)
+#define CIRCUITPY_CONSOLE_UART_PRINTF(...) mp_printf(&console_uart_print, __VA_ARGS__)
+#endif
+#if !defined(CIRCUITPY_CONSOLE_UART_HEXDUMP)
+#define CIRCUITPY_CONSOLE_UART_HEXDUMP(pfx, buf, len) print_hexdump(&console_uart_print, pfx, (const uint8_t *)buf, len)
+#endif
+#if !defined(CIRCUITPY_CONSOLE_UART_TIMESTAMP)
+#define CIRCUITPY_CONSOLE_UART_TIMESTAMP (0)
+#endif
 #endif
 #else
-#define BOARD_UART_ROOT_POINTER     mp_obj_t board_uart_bus;
+#define CIRCUITPY_CONSOLE_UART (0)
+#define CIRCUITPY_CONSOLE_UART_PRINTF(...) (void)0
+#define CIRCUITPY_CONSOLE_UART_HEXDUMP(...) (void)0
 #endif
 
 // These CIRCUITPY_xxx values should all be defined in the *.mk files as being on or off.
@@ -314,46 +378,18 @@ typedef long mp_off_t;
 #define CIRCUITPY_DISPLAY_AREA_BUFFER_SIZE (0)
 #endif
 
-#if CIRCUITPY_KEYPAD
-#define KEYPAD_ROOT_POINTERS mp_obj_t keypad_scanners_linked_list;
-#else
-#define KEYPAD_ROOT_POINTERS
-#endif
-
-#if CIRCUITPY_MEMORYMONITOR
-#define MEMORYMONITOR_ROOT_POINTERS mp_obj_t active_allocationsizes; \
-    mp_obj_t active_allocationalarms;
-#else
-#define MEMORYMONITOR_ROOT_POINTERS
-#endif
-
 // This is not a top-level module; it's microcontroller.nvm.
 #if CIRCUITPY_NVM
 extern const struct _mp_obj_module_t nvm_module;
 #endif
 
-// Following modules are implemented in either extmod or py directory.
-
-#define MICROPY_PY_UBINASCII CIRCUITPY_BINASCII
-
-#define MICROPY_PY_UERRNO CIRCUITPY_ERRNO
-// Uses about 80 bytes.
-#define MICROPY_PY_UERRNO_ERRORCODE CIRCUITPY_ERRNO
-
-#define MICROPY_PY_URE CIRCUITPY_RE
-
-#if CIRCUITPY_JSON
-#define MICROPY_PY_UJSON (1)
-#define MICROPY_PY_IO (1)
-#else
-#ifndef MICROPY_PY_IO
-// We don't need MICROPY_PY_IO unless someone else wants it.
-#define MICROPY_PY_IO (0)
-#endif
-#endif
-
 #ifndef ULAB_SUPPORTS_COMPLEX
 #define ULAB_SUPPORTS_COMPLEX (0)
+#endif
+
+// The random module is fairly large.
+#ifndef ULAB_NUMPY_HAS_RANDOM_MODULE
+#define ULAB_NUMPY_HAS_RANDOM_MODULE (0)
 #endif
 
 #if CIRCUITPY_ULAB
@@ -361,12 +397,6 @@ extern const struct _mp_obj_module_t nvm_module;
 #if defined(MICROPY_PY_REVERSE_SPECIAL_METHODS) && !MICROPY_PY_REVERSE_SPECIAL_METHODS
 #error "ulab requires MICROPY_PY_REVERSE_SPECIAL_METHODS"
 #endif
-#endif
-
-#if CIRCUITPY_WIFI
-#define WIFI_MONITOR_ROOT_POINTERS mp_obj_t wifi_monitor_singleton;
-#else
-#define WIFI_MONITOR_ROOT_POINTERS
 #endif
 
 // Define certain native modules with weak links so they can be replaced with Python
@@ -377,7 +407,7 @@ extern const struct _mp_obj_module_t nvm_module;
 // Native modules that are weak links can be accessed directly
 // by prepending their name with an underscore. This list should correspond to
 // MICROPY_PORT_BUILTIN_MODULE_WEAK_LINKS, assuming you want the native modules
-// to be accessible when overriden.
+// to be accessible when overridden.
 
 #define MICROPY_PORT_BUILTIN_MODULE_ALT_NAMES
 
@@ -406,25 +436,8 @@ extern const struct _mp_obj_module_t nvm_module;
 
 #define MP_STATE_PORT MP_STATE_VM
 
-#include "supervisor/flash_root_pointers.h"
-
-// From supervisor/memory.c
-struct _supervisor_allocation_node;
-
-#define CIRCUITPY_COMMON_ROOT_POINTERS \
-    FLASH_ROOT_POINTERS \
-    KEYPAD_ROOT_POINTERS \
-    BOARD_UART_ROOT_POINTER \
-    WIFI_MONITOR_ROOT_POINTERS \
-    MEMORYMONITOR_ROOT_POINTERS \
-    vstr_t *repl_line; \
-    mp_obj_t pew_singleton; \
-    mp_obj_t rtc_time_source; \
-    const char *readline_hist[8]; \
-    struct _supervisor_allocation_node *first_embedded_allocation; \
-
-void supervisor_run_background_tasks_if_tick(void);
-#define RUN_BACKGROUND_TASKS (supervisor_run_background_tasks_if_tick())
+void background_callback_run_all(void);
+#define RUN_BACKGROUND_TASKS (background_callback_run_all())
 
 #define MICROPY_VM_HOOK_LOOP RUN_BACKGROUND_TASKS;
 #define MICROPY_VM_HOOK_RETURN RUN_BACKGROUND_TASKS;
@@ -440,6 +453,18 @@ void supervisor_run_background_tasks_if_tick(void);
 
 #ifndef CIRCUITPY_PYSTACK_SIZE
 #define CIRCUITPY_PYSTACK_SIZE 1536
+#endif
+
+// The VM heap starts at this size and doubles in size as needed until it runs
+// out of memory in the outer heap. Once it can't double, it'll then grow into
+// the largest contiguous free area.
+#ifndef CIRCUITPY_HEAP_START_SIZE
+#define CIRCUITPY_HEAP_START_SIZE (8 * 1024)
+#endif
+
+// How much of the c stack we leave to ensure we can process exceptions.
+#ifndef CIRCUITPY_EXCEPTION_STACK_SIZE
+#define CIRCUITPY_EXCEPTION_STACK_SIZE 1024
 #endif
 
 // Wait this long before sleeping immediately after startup, to see if we are connected via USB or BLE.
@@ -465,13 +490,8 @@ void supervisor_run_background_tasks_if_tick(void);
 #error "boot counter requires CIRCUITPY_NVM enabled"
 #endif
 
+#ifndef CIRCUITPY_VERBOSE_BLE
 #define CIRCUITPY_VERBOSE_BLE 0
-
-// This trades ~1k flash space (1) for that much in RAM plus the cost to compute
-// the values once on init (0). Only turn it off, when you really need the flash
-// space and are willing to trade the RAM.
-#ifndef CIRCUITPY_PRECOMPUTE_QSTR_ATTR
-#define CIRCUITPY_PRECOMPUTE_QSTR_ATTR (1)
 #endif
 
 // Display the Blinka logo in the REPL on displayio displays.
@@ -567,6 +587,62 @@ void supervisor_run_background_tasks_if_tick(void);
 #define MICROPY_WRAP_MP_EXECUTE_BYTECODE PLACE_IN_ITCM
 #endif
 
+#ifndef MICROPY_WRAP_MP_LOAD_GLOBAL
+#define MICROPY_WRAP_MP_LOAD_GLOBAL PLACE_IN_ITCM
+#endif
+
+#ifndef MICROPY_WRAP_MP_LOAD_NAME
+#define MICROPY_WRAP_MP_LOAD_NAME PLACE_IN_ITCM
+#endif
+
+#ifndef MICROPY_WRAP_MP_OBJ_GET_TYPE
+#define MICROPY_WRAP_MP_OBJ_GET_TYPE PLACE_IN_ITCM
+#endif
+
+#ifndef CIRCUITPY_DIGITALIO_HAVE_INPUT_ONLY
+#define CIRCUITPY_DIGITALIO_HAVE_INPUT_ONLY (0)
+#endif
+
+#ifndef CIRCUITPY_DIGITALIO_HAVE_INVALID_PULL
+#define CIRCUITPY_DIGITALIO_HAVE_INVALID_PULL (0)
+#endif
+
+#ifndef CIRCUITPY_DIGITALIO_HAVE_INVALID_DRIVE_MODE
+#define CIRCUITPY_DIGITALIO_HAVE_INVALID_DRIVE_MODE (0)
+#endif
+
+// Align the internal sector buffer. Useful when it is passed into TinyUSB for
+// loads.
+#ifndef MICROPY_FATFS_WINDOW_ALIGNMENT
+#define MICROPY_FATFS_WINDOW_ALIGNMENT CIRCUITPY_TUSB_MEM_ALIGN
+#endif
+
+#define FF_FS_CASE_INSENSITIVE_COMPARISON_ASCII_ONLY (1)
+
+#define FF_FS_MAKE_VOLID (1)
+
 #define MICROPY_PY_OPTIMIZE_PROPERTY_FLASH_SIZE (CIRCUITPY_OPTIMIZE_PROPERTY_FLASH_SIZE)
 
-#endif  // __INCLUDED_MPCONFIG_CIRCUITPY_H
+// Enable compiler functionality.
+#define MICROPY_ENABLE_COMPILER (1)
+#define MICROPY_PY_BUILTINS_COMPILE (1)
+
+#ifndef CIRCUITPY_MIN_GCC_VERSION
+#define CIRCUITPY_MIN_GCC_VERSION 13
+#endif
+
+#ifndef CIRCUITPY_SAVES_PARTITION_SIZE
+#define CIRCUITPY_SAVES_PARTITION_SIZE 0
+#endif
+
+#if defined(__GNUC__) && !defined(__ZEPHYR__)
+#if __GNUC__ < CIRCUITPY_MIN_GCC_VERSION
+// (the 3 level scheme here is required to get expansion & stringization
+// correct)
+#define DO_PRAGMA(x) _Pragma(#x)
+#define DO_ERROR_HELPER(x) DO_PRAGMA(GCC error #x)
+#define DO_ERROR(x) DO_ERROR_HELPER(Minimum GCC version x \
+    -- older versions are known to miscompile CircuitPython)
+DO_ERROR(CIRCUITPY_MIN_GCC_VERSION);
+#endif
+#endif

@@ -1,33 +1,12 @@
-/*
- * This file is part of the MicroPython project, http://micropython.org/
- *
- * The MIT License (MIT)
- *
- * SPDX-FileCopyrightText: Copyright (c) 2013, 2014 Damien P. George
- * Copyright (c) 2017 Michael McWethy
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
- */
+// This file is part of the CircuitPython project: https://circuitpython.org
+//
+// SPDX-FileCopyrightText: Copyright (c) 2013, 2014 Damien P. George
+// SPDX-FileCopyrightText: Copyright (c) 2017 Michael McWethy
+//
+// SPDX-License-Identifier: MIT
 
 #include "py/builtin.h"
 #include "py/runtime.h"
-#include "supervisor/shared/translate/translate.h"
 
 #if MICROPY_PY_BUILTINS_FLOAT
 
@@ -47,35 +26,35 @@
 //| """
 //|
 
-STATIC NORETURN void math_error(void) {
-    mp_raise_ValueError(translate("math domain error"));
+static NORETURN void math_error(void) {
+    mp_raise_ValueError(MP_ERROR_TEXT("math domain error"));
 }
 
 #define MATH_FUN_1(py_name, c_name) \
-    STATIC mp_obj_t mp_math_##py_name(mp_obj_t x_obj) { return mp_obj_new_float(MICROPY_FLOAT_C_FUN(c_name)(mp_obj_get_float(x_obj))); } \
-    STATIC MP_DEFINE_CONST_FUN_OBJ_1(mp_math_##py_name##_obj, mp_math_##py_name);
+    static mp_obj_t mp_math_##py_name(mp_obj_t x_obj) { return mp_obj_new_float(MICROPY_FLOAT_C_FUN(c_name)(mp_obj_get_float(x_obj))); } \
+    static MP_DEFINE_CONST_FUN_OBJ_1(mp_math_##py_name##_obj, mp_math_##py_name);
 
 #define MATH_FUN_2(py_name, c_name) \
-    STATIC mp_obj_t mp_math_##py_name(mp_obj_t x_obj, mp_obj_t y_obj) { return mp_obj_new_float(MICROPY_FLOAT_C_FUN(c_name)(mp_obj_get_float(x_obj), mp_obj_get_float(y_obj))); } \
-    STATIC MP_DEFINE_CONST_FUN_OBJ_2(mp_math_##py_name##_obj, mp_math_##py_name);
+    static mp_obj_t mp_math_##py_name(mp_obj_t x_obj, mp_obj_t y_obj) { return mp_obj_new_float(MICROPY_FLOAT_C_FUN(c_name)(mp_obj_get_float(x_obj), mp_obj_get_float(y_obj))); } \
+    static MP_DEFINE_CONST_FUN_OBJ_2(mp_math_##py_name##_obj, mp_math_##py_name);
 
 #define MATH_FUN_1_TO_BOOL(py_name, c_name) \
-    STATIC mp_obj_t mp_math_##py_name(mp_obj_t x_obj) { return mp_obj_new_bool(c_name(mp_obj_get_float(x_obj))); } \
-    STATIC MP_DEFINE_CONST_FUN_OBJ_1(mp_math_##py_name##_obj, mp_math_##py_name);
+    static mp_obj_t mp_math_##py_name(mp_obj_t x_obj) { return mp_obj_new_bool(c_name(mp_obj_get_float(x_obj))); } \
+    static MP_DEFINE_CONST_FUN_OBJ_1(mp_math_##py_name##_obj, mp_math_##py_name);
 
 #define MATH_FUN_1_TO_INT(py_name, c_name) \
-    STATIC mp_obj_t mp_math_##py_name(mp_obj_t x_obj) { return mp_obj_new_int_from_float(MICROPY_FLOAT_C_FUN(c_name)(mp_obj_get_float(x_obj))); } \
-    STATIC MP_DEFINE_CONST_FUN_OBJ_1(mp_math_##py_name##_obj, mp_math_##py_name);
+    static mp_obj_t mp_math_##py_name(mp_obj_t x_obj) { return mp_obj_new_int_from_float(MICROPY_FLOAT_C_FUN(c_name)(mp_obj_get_float(x_obj))); } \
+    static MP_DEFINE_CONST_FUN_OBJ_1(mp_math_##py_name##_obj, mp_math_##py_name);
 
 #define MATH_FUN_1_ERRCOND(py_name, c_name, error_condition) \
-    STATIC mp_obj_t mp_math_##py_name(mp_obj_t x_obj) { \
+    static mp_obj_t mp_math_##py_name(mp_obj_t x_obj) { \
         mp_float_t x = mp_obj_get_float(x_obj); \
         if (error_condition) { \
             math_error(); \
         } \
         return mp_obj_new_float(MICROPY_FLOAT_C_FUN(c_name)(x)); \
     } \
-    STATIC MP_DEFINE_CONST_FUN_OBJ_1(mp_math_##py_name##_obj, mp_math_##py_name);
+    static MP_DEFINE_CONST_FUN_OBJ_1(mp_math_##py_name##_obj, mp_math_##py_name);
 
 #ifdef MP_NEED_LOG2
 // 1.442695040888963407354163704 is 1/_M_LN2
@@ -88,54 +67,67 @@ STATIC NORETURN void math_error(void) {
 //| pi: float
 //| """the ratio of a circle's circumference to its diameter"""
 //|
+//|
 
 //| def acos(x: float) -> float:
 //|     """Return the inverse cosine of ``x``."""
 //|     ...
 //|
+//|
 //| def asin(x: float) -> float:
 //|     """Return the inverse sine of ``x``."""
 //|     ...
+//|
 //|
 //| def atan(x: float) -> float:
 //|     """Return the inverse tangent of ``x``."""
 //|     ...
 //|
+//|
 //| def atan2(y: float, x: float) -> float:
 //|     """Return the principal value of the inverse tangent of ``y/x``."""
 //|     ...
+//|
 //|
 //| def ceil(x: float) -> int:
 //|     """Return an integer, being ``x`` rounded towards positive infinity."""
 //|     ...
 //|
+//|
 //| def copysign(x: float, y: float) -> float:
 //|     """Return ``x`` with the sign of ``y``."""
 //|     ...
+//|
 //|
 //| def cos(x: float) -> float:
 //|     """Return the cosine of ``x``."""
 //|     ...
 //|
+//|
 //| def degrees(x: float) -> float:
 //|     """Return radians ``x`` converted to degrees."""
 //|     ...
+//|
 //|
 //| def exp(x: float) -> float:
 //|     """Return the exponential of ``x``."""
 //|     ...
 //|
+//|
 //| def fabs(x: float) -> float:
 //|     """Return the absolute value of ``x``."""
 //|     ...
+//|
 //|
 //| def floor(x: float) -> int:
 //|     """Return an integer, being ``x`` rounded towards negative infinity."""
 //|     ...
 //|
+//|
 //| def fmod(x: float, y: float) -> int:
 //|     """Return the remainder of ``x/y``."""
 //|     ...
+//|
 //|
 //| def frexp(x: float) -> Tuple[int, int]:
 //|     """Decomposes a floating-point number into its mantissa and exponent.
@@ -144,53 +136,66 @@ STATIC NORETURN void math_error(void) {
 //|     the relation ``0.5 <= abs(m) < 1`` holds."""
 //|     ...
 //|
+//|
 //| def isfinite(x: float) -> bool:
 //|     """Return ``True`` if ``x`` is finite."""
 //|     ...
+//|
 //|
 //| def isinf(x: float) -> bool:
 //|     """Return ``True`` if ``x`` is infinite."""
 //|     ...
 //|
+//|
 //| def isnan(x: float) -> bool:
 //|     """Return ``True`` if ``x`` is not-a-number"""
 //|     ...
 //|
+//|
 //| def ldexp(x: float, exp: float) -> float:
 //|     """Return ``x * (2**exp)``."""
 //|     ...
+//|
 //|
 //| def log(x: float, base: float = e) -> float:
 //|     """Return the logarithm of x to the given base. If base is not specified,
 //|     returns the natural logarithm (base e) of x"""
 //|     ...
 //|
+//|
 //| def modf(x: float) -> Tuple[float, float]:
 //|     """Return a tuple of two floats, being the fractional and integral parts of
 //|     ``x``.  Both return values have the same sign as ``x``."""
 //|     ...
 //|
+//|
 //| def pow(x: float, y: float) -> float:
 //|     """Returns ``x`` to the power of ``y``."""
 //|
+//|
 //| def radians(x: float) -> float:
 //|     """Return degrees ``x`` converted to radians."""
+//|
 //|
 //| def sin(x: float) -> float:
 //|     """Return the sine of ``x``."""
 //|     ...
 //|
+//|
 //| def sqrt(x: float) -> float:
 //|     """Returns the square root of ``x``."""
 //|     ...
+//|
 //|
 //| def tan(x: float) -> float:
 //|     """Return the tangent of ``x``."""
 //|     ...
 //|
+//|
 //| def trunc(x: float) -> int:
 //|     """Return an integer, being ``x`` rounded towards 0."""
 //|     ...
+//|
 //|
 MATH_FUN_1_ERRCOND(sqrt, sqrt, (x < (mp_float_t)0.0))
 
@@ -205,6 +210,7 @@ MATH_FUN_1(exp, exp)
 //|     """
 //|     ...
 //|
+//|
 MATH_FUN_1(expm1, expm1)
 
 //| def log2(x: float) -> float:
@@ -213,6 +219,7 @@ MATH_FUN_1(expm1, expm1)
 //|     May not be available on some boards.
 //|     """
 //|     ...
+//|
 //|
 MATH_FUN_1_ERRCOND(log2, log2, (x <= (mp_float_t)0.0))
 
@@ -223,6 +230,7 @@ MATH_FUN_1_ERRCOND(log2, log2, (x <= (mp_float_t)0.0))
 //|     """
 //|     ...
 //|
+//|
 MATH_FUN_1_ERRCOND(log10, log10, (x <= (mp_float_t)0.0))
 
 //| def cosh(x: float) -> float:
@@ -231,6 +239,7 @@ MATH_FUN_1_ERRCOND(log10, log10, (x <= (mp_float_t)0.0))
 //|     May not be available on some boards.
 //|     """
 //|     ...
+//|
 //|
 MATH_FUN_1(cosh, cosh)
 
@@ -241,6 +250,7 @@ MATH_FUN_1(cosh, cosh)
 //|     """
 //|     ...
 //|
+//|
 MATH_FUN_1(sinh, sinh)
 
 //| def tanh(x: float) -> float:
@@ -249,6 +259,7 @@ MATH_FUN_1(sinh, sinh)
 //|     May not be available on some boards.
 //|     """
 //|     ...
+//|
 //|
 MATH_FUN_1(tanh, tanh)
 
@@ -259,6 +270,7 @@ MATH_FUN_1(tanh, tanh)
 //|     """
 //|     ...
 //|
+//|
 MATH_FUN_1(acosh, acosh)
 
 //| def asinh(x: float) -> float:
@@ -268,6 +280,7 @@ MATH_FUN_1(acosh, acosh)
 //|     """
 //|     ...
 //|
+//|
 MATH_FUN_1(asinh, asinh)
 
 //| def atanh(x: float) -> float:
@@ -276,6 +289,7 @@ MATH_FUN_1(asinh, asinh)
 //|     May not be available on some boards.
 //|     """
 //|     ...
+//|
 //|
 MATH_FUN_1(atanh, atanh)
 #endif
@@ -322,6 +336,7 @@ MATH_FUN_2(ldexp, ldexp)
 //|     """
 //|     ...
 //|
+//|
 MATH_FUN_1(erf, erf)
 
 //| def erfc(x: float) -> float:
@@ -330,6 +345,7 @@ MATH_FUN_1(erf, erf)
 //|     May not be available on some boards.
 //|     """
 //|     ...
+//|
 //|
 MATH_FUN_1(erfc, erfc)
 
@@ -340,6 +356,7 @@ MATH_FUN_1(erfc, erfc)
 //|     """
 //|     ...
 //|
+//|
 MATH_FUN_1(gamma, tgamma)
 
 //| def lgamma(x: float) -> float:
@@ -349,14 +366,44 @@ MATH_FUN_1(gamma, tgamma)
 //|     """
 //|     ...
 //|
+//|
 MATH_FUN_1(lgamma, lgamma)
+
+//| def dist(p: tuple, q: tuple) -> float:
+//|     """Return the Euclidean distance between two points ``p`` and ``q``.
+//|
+//|     May not be available on some boards.
+//|     """
+//|     ...
+//|
+//|
+static mp_obj_t mp_math_dist(mp_obj_t p_obj, mp_obj_t q_obj) {
+    mp_obj_t *p_items;
+    mp_obj_get_array_fixed_n(p_obj, 2, &p_items);
+
+    mp_obj_t *q_items;
+    mp_obj_get_array_fixed_n(q_obj, 2, &q_items);
+
+    mp_float_t px_in = mp_obj_get_float(p_items[0]);
+    mp_float_t py_in = mp_obj_get_float(p_items[1]);
+
+    mp_float_t qx_in = mp_obj_get_float(q_items[0]);
+    mp_float_t qy_in = mp_obj_get_float(q_items[1]);
+
+    mp_float_t dist_x = px_in - qx_in;
+    mp_float_t dist_y = py_in - qy_in;
+
+    return mp_obj_new_float(sqrtf((dist_x * dist_x) + (dist_y * dist_y)));
+}
+static MP_DEFINE_CONST_FUN_OBJ_2(mp_math_dist_obj, mp_math_dist);
+
 #endif
 // TODO: factorial, fsum
 
 // Function that takes a variable number of arguments
 
 // log(x[, base])
-STATIC mp_obj_t mp_math_log(size_t n_args, const mp_obj_t *args) {
+static mp_obj_t mp_math_log(size_t n_args, const mp_obj_t *args) {
     mp_float_t x = mp_obj_get_float(args[0]);
     if (x <= (mp_float_t)0.0) {
         math_error();
@@ -373,17 +420,17 @@ STATIC mp_obj_t mp_math_log(size_t n_args, const mp_obj_t *args) {
             #pragma GCC diagnostic ignored "-Wfloat-equal"
         } else if (base == (mp_float_t)1.0) {
             #pragma GCC diagnostic pop
-            mp_raise_msg(&mp_type_ZeroDivisionError, translate("division by zero"));
+            math_error();
         }
         return mp_obj_new_float(l / MICROPY_FLOAT_C_FUN(log)(base));
     }
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_math_log_obj, 1, 2, mp_math_log);
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_math_log_obj, 1, 2, mp_math_log);
 
 // Functions that return a tuple
 
 
-STATIC mp_obj_t mp_math_frexp(mp_obj_t x_obj) {
+static mp_obj_t mp_math_frexp(mp_obj_t x_obj) {
     int int_exponent = 0;
     mp_float_t significand = MICROPY_FLOAT_C_FUN(frexp)(mp_obj_get_float(x_obj), &int_exponent);
     mp_obj_t tuple[2];
@@ -391,9 +438,9 @@ STATIC mp_obj_t mp_math_frexp(mp_obj_t x_obj) {
     tuple[1] = mp_obj_new_int(int_exponent);
     return mp_obj_new_tuple(2, tuple);
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_1(mp_math_frexp_obj, mp_math_frexp);
+static MP_DEFINE_CONST_FUN_OBJ_1(mp_math_frexp_obj, mp_math_frexp);
 
-STATIC mp_obj_t mp_math_modf(mp_obj_t x_obj) {
+static mp_obj_t mp_math_modf(mp_obj_t x_obj) {
     mp_float_t int_part = 0.0;
     mp_float_t fractional_part = MICROPY_FLOAT_C_FUN(modf)(mp_obj_get_float(x_obj), &int_part);
     mp_obj_t tuple[2];
@@ -401,23 +448,23 @@ STATIC mp_obj_t mp_math_modf(mp_obj_t x_obj) {
     tuple[1] = mp_obj_new_float(int_part);
     return mp_obj_new_tuple(2, tuple);
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_1(mp_math_modf_obj, mp_math_modf);
+static MP_DEFINE_CONST_FUN_OBJ_1(mp_math_modf_obj, mp_math_modf);
 
 // Angular conversions
 
 
-STATIC mp_obj_t mp_math_radians(mp_obj_t x_obj) {
+static mp_obj_t mp_math_radians(mp_obj_t x_obj) {
     return mp_obj_new_float(mp_obj_get_float(x_obj) * (MP_PI / MICROPY_FLOAT_CONST(180.0)));
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_1(mp_math_radians_obj, mp_math_radians);
+static MP_DEFINE_CONST_FUN_OBJ_1(mp_math_radians_obj, mp_math_radians);
 
 
-STATIC mp_obj_t mp_math_degrees(mp_obj_t x_obj) {
+static mp_obj_t mp_math_degrees(mp_obj_t x_obj) {
     return mp_obj_new_float(mp_obj_get_float(x_obj) * (MICROPY_FLOAT_CONST(180.0) / MP_PI));
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_1(mp_math_degrees_obj, mp_math_degrees);
+static MP_DEFINE_CONST_FUN_OBJ_1(mp_math_degrees_obj, mp_math_degrees);
 
-STATIC const mp_rom_map_elem_t mp_module_math_globals_table[] = {
+static const mp_rom_map_elem_t mp_module_math_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR___name__), MP_ROM_QSTR(MP_QSTR_math) },
     { MP_ROM_QSTR(MP_QSTR_e), mp_const_float_e },
     { MP_ROM_QSTR(MP_QSTR_pi), mp_const_float_pi },
@@ -437,6 +484,7 @@ STATIC const mp_rom_map_elem_t mp_module_math_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_acosh), MP_ROM_PTR(&mp_math_acosh_obj) },
     { MP_ROM_QSTR(MP_QSTR_asinh), MP_ROM_PTR(&mp_math_asinh_obj) },
     { MP_ROM_QSTR(MP_QSTR_atanh), MP_ROM_PTR(&mp_math_atanh_obj) },
+    { MP_ROM_QSTR(MP_QSTR_dist), MP_ROM_PTR(&mp_math_dist_obj) },
     #endif
     { MP_ROM_QSTR(MP_QSTR_cos), MP_ROM_PTR(&mp_math_cos_obj) },
     { MP_ROM_QSTR(MP_QSTR_sin), MP_ROM_PTR(&mp_math_sin_obj) },
@@ -467,13 +515,13 @@ STATIC const mp_rom_map_elem_t mp_module_math_globals_table[] = {
     #endif
 };
 
-STATIC MP_DEFINE_CONST_DICT(mp_module_math_globals, mp_module_math_globals_table);
+static MP_DEFINE_CONST_DICT(mp_module_math_globals, mp_module_math_globals_table);
 
 const mp_obj_module_t math_module = {
     .base = { &mp_type_module },
     .globals = (mp_obj_dict_t *)&mp_module_math_globals,
 };
 
-MP_REGISTER_MODULE(MP_QSTR_math, math_module, CIRCUITPY_MATH);
+MP_REGISTER_MODULE(MP_QSTR_math, math_module);
 
 #endif // MICROPY_PY_BUILTINS_FLOAT

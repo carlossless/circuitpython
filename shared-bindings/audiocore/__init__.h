@@ -1,34 +1,22 @@
-/*
- * This file is part of the MicroPython project, http://micropython.org/
- *
- * The MIT License (MIT)
- *
- * Copyright (c) 2017 Scott Shawcroft for Adafruit Industries
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
- */
+// This file is part of the CircuitPython project: https://circuitpython.org
+//
+// SPDX-FileCopyrightText: Copyright (c) 2017 Scott Shawcroft for Adafruit Industries
+//
+// SPDX-License-Identifier: MIT
 
-#ifndef MICROPY_INCLUDED_SHARED_BINDINGS_AUDIOCORE___INIT___H
-#define MICROPY_INCLUDED_SHARED_BINDINGS_AUDIOCORE___INIT___H
+#pragma once
 
-#include "py/obj.h"
+#include "py/objproperty.h"
 
-// Nothing now.
+#define AUDIOSAMPLE_FIELDS \
+    { MP_ROM_QSTR(MP_QSTR_sample_rate), MP_ROM_PTR(&audiosample_sample_rate_obj) }, \
+    { MP_ROM_QSTR(MP_QSTR_bits_per_sample), MP_ROM_PTR(&audiosample_bits_per_sample_obj) }, \
+    { MP_ROM_QSTR(MP_QSTR_channel_count), MP_ROM_PTR(&audiosample_channel_count_obj) }
 
-#endif  // MICROPY_INCLUDED_SHARED_BINDINGS_AUDIOCORE___INIT___H
+typedef struct audiosample_base audiosample_base_t;
+extern const mp_obj_property_getset_t audiosample_sample_rate_obj;
+extern const mp_obj_property_getter_t audiosample_bits_per_sample_obj;
+extern const mp_obj_property_getter_t audiosample_channel_count_obj;
+void audiosample_check_for_deinit(const audiosample_base_t *self);
+bool audiosample_deinited(const audiosample_base_t *self);
+void audiosample_mark_deinit(audiosample_base_t *self);

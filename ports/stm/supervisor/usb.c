@@ -1,41 +1,19 @@
-/*
- * This file is part of the Micro Python project, http://micropython.org/
- *
- * The MIT License (MIT)
- *
- * Copyright (c) 2018 hathach for Adafruit Industries
- * Copyright (c) 2019 Lucian Copeland for Adafruit Industries
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
- */
+// This file is part of the CircuitPython project: https://circuitpython.org
+//
+// SPDX-FileCopyrightText: Copyright (c) 2018 hathach for Adafruit Industries
+// SPDX-FileCopyrightText: Copyright (c) 2019 Lucian Copeland for Adafruit Industries
+//
+// SPDX-License-Identifier: MIT
 
 
 #include "supervisor/usb.h"
-#include "shared/runtime/interrupt_char.h"
 #include "shared/readline/readline.h"
-#include "lib/tinyusb/src/device/usbd.h"
 
 #include "py/mpconfig.h"
 
 #include "common-hal/microcontroller/Pin.h"
 
-STATIC void init_usb_vbus_sense(void) {
+static void init_usb_vbus_sense(void) {
 
     #if (BOARD_NO_VBUS_SENSE)
     // Disable VBUS sensing
@@ -51,7 +29,7 @@ STATIC void init_usb_vbus_sense(void) {
     // B-peripheral session valid override enable
     USB_OTG_FS->GOTGCTL |= USB_OTG_GOTGCTL_BVALOEN;
     USB_OTG_FS->GOTGCTL |= USB_OTG_GOTGCTL_BVALOVAL;
-    #else
+    #elif !defined(STM32L433xx) && !defined(STM32L4R5xx)
     USB_OTG_FS->GCCFG |= USB_OTG_GCCFG_NOVBUSSENS;
     USB_OTG_FS->GCCFG &= ~USB_OTG_GCCFG_VBUSBSEN;
     USB_OTG_FS->GCCFG &= ~USB_OTG_GCCFG_VBUSASEN;
@@ -78,7 +56,7 @@ void init_usb_hardware(void) {
 
     GPIO_InitTypeDef GPIO_InitStruct = {0};
     /**USB_OTG_FS GPIO Configuration
-    PA10     ------> USB_OTG_FS_ID
+    PA10     ------> USB_OTG_FS_ID (not present on STM32L433)
     PA11     ------> USB_OTG_FS_DM
     PA12     ------> USB_OTG_FS_DP
     */
@@ -91,10 +69,15 @@ void init_usb_hardware(void) {
     GPIO_InitStruct.Pull = GPIO_NOPULL;
     #if CPY_STM32H7
     GPIO_InitStruct.Alternate = GPIO_AF10_OTG1_FS;
-    #elif CPY_STM32F4 || CPY_STM32F7 || CPY_STM32L4
+    #elif CPY_STM32F4 || CPY_STM32F7 || defined(STM32L4R5xx)
     GPIO_InitStruct.Alternate = GPIO_AF10_OTG_FS;
+    #elif defined(STM32L433xx)
+    GPIO_InitStruct.Alternate = GPIO_AF10_USB_FS;
+    #else
+    #error Unknown MCU
     #endif
     HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
     never_reset_pin_number(0, 11);
     never_reset_pin_number(0, 12);
     claim_pin(0, 11);
@@ -139,15 +122,21 @@ void init_usb_hardware(void) {
     #if CPY_STM32H7
     HAL_PWREx_EnableUSBVoltageDetector();
     __HAL_RCC_USB2_OTG_FS_CLK_ENABLE();
-    #else
+    #elif CPY_STM32F4 || CPY_STM32F7 || defined(STM32L4R5xx)
     /* Peripheral clock enable */
     __HAL_RCC_USB_OTG_FS_CLK_ENABLE();
+    #else
+    __HAL_RCC_USB_CLK_ENABLE();
     #endif
-
 
     init_usb_vbus_sense();
 }
 
-void OTG_FS_IRQHandler(void) {
+#if defined(STM32L433xx)
+void USB_IRQHandler(void)
+#else
+void OTG_FS_IRQHandler(void)
+#endif
+{
     usb_irq_handler(0);
 }

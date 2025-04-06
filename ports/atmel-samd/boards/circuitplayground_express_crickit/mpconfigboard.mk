@@ -7,7 +7,7 @@ CHIP_VARIANT = SAMD21G18A
 CHIP_FAMILY = samd21
 
 SPI_FLASH_FILESYSTEM = 1
-EXTERNAL_FLASH_DEVICES = "S25FL216K, GD25Q16C"
+EXTERNAL_FLASH_DEVICES = "S25FL216K, GD25Q16C, W25Q16JVxQ"
 
 # Turn off features and optimizations for Crickit build to make room for additional frozen libs.
 LONGINT_IMPL = NONE
@@ -15,7 +15,6 @@ LONGINT_IMPL = NONE
 CIRCUITPY_BUSDEVICE = 1
 CIRCUITPY_DISPLAYIO = 0
 CIRCUITPY_KEYPAD = 0
-CIRCUITPY_ONEWIREIO = 0
 
 # Include these Python libraries in firmware.
 FROZEN_MPY_DIRS += $(TOP)/frozen/Adafruit_CircuitPython_CircuitPlayground/frozen_cpx

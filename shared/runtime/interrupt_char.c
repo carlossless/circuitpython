@@ -26,9 +26,19 @@
 
 #include "py/obj.h"
 #include "py/mpstate.h"
+// CIRCUITPY-CHANGE
 #include "shared/runtime/interrupt_char.h"
 
 #if MICROPY_KBD_EXCEPTION
+
+#ifdef __ZEPHYR__
+#include <zephyr/kernel.h>
+
+// This semaphore is released when an interrupt character is seen. Core CP code
+// can wait for this release but shouldn't take it. They should return instead
+// after cancelling what they were doing.
+K_SEM_DEFINE(mp_interrupt_sem, 0, 1);
+#endif
 
 int mp_interrupt_char = -1;
 
@@ -36,6 +46,7 @@ void mp_hal_set_interrupt_char(int c) {
     mp_interrupt_char = c;
 }
 
+// CIRCUITPY-CHANGE
 // Check to see if we've been CTRL-C'ed by autoreload or the user.
 bool mp_hal_is_interrupted(void) {
     return MP_STATE_THREAD(mp_pending_exception) != MP_OBJ_FROM_PTR(NULL);

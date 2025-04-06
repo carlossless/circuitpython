@@ -1,28 +1,8 @@
-/*
- * This file is part of the MicroPython project, http://micropython.org/
- *
- * The MIT License (MIT)
- *
- * Copyright (c) 2020 microDev
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
- */
+// This file is part of the CircuitPython project: https://circuitpython.org
+//
+// SPDX-FileCopyrightText: Copyright (c) 2020 microDev
+//
+// SPDX-License-Identifier: MIT
 
 #include "common-hal/nvm/ByteArray.h"
 #include "shared-bindings/nvm/ByteArray.h"
@@ -30,8 +10,9 @@
 #include <string.h>
 
 #include "py/runtime.h"
-#include "src/rp2_common/hardware_flash/include/hardware/flash.h"
+#include "hardware/flash.h"
 #include "shared-bindings/microcontroller/__init__.h"
+#include "supervisor/internal_flash.h"
 
 extern uint32_t __flash_binary_start;
 static const uint32_t flash_binary_start = (uint32_t)&__flash_binary_start;
@@ -46,17 +27,16 @@ static void write_page(uint32_t page_addr, uint32_t offset, uint32_t len, uint8_
     // Write a whole page to flash, buffering it first and then erasing and rewriting it
     // since we can only write a whole page at a time.
     if (offset == 0 && len == FLASH_PAGE_SIZE) {
-        // disable interrupts to prevent core hang on rp2040
-        common_hal_mcu_disable_interrupts();
+        supervisor_flash_pre_write();
         flash_range_program(RMV_OFFSET(page_addr), bytes, FLASH_PAGE_SIZE);
-        common_hal_mcu_enable_interrupts();
+        supervisor_flash_post_write();
     } else {
         uint8_t buffer[FLASH_PAGE_SIZE];
         memcpy(buffer, (uint8_t *)page_addr, FLASH_PAGE_SIZE);
         memcpy(buffer + offset, bytes, len);
-        common_hal_mcu_disable_interrupts();
+        supervisor_flash_pre_write();
         flash_range_program(RMV_OFFSET(page_addr), buffer, FLASH_PAGE_SIZE);
-        common_hal_mcu_enable_interrupts();
+        supervisor_flash_post_write();
     }
 
 }
@@ -77,8 +57,10 @@ static void erase_and_write_sector(uint32_t address, uint32_t len, uint8_t *byte
     memcpy(buffer + address, bytes, len);
     // disable interrupts to prevent core hang on rp2040
     common_hal_mcu_disable_interrupts();
+    supervisor_flash_pre_write();
     flash_range_erase(RMV_OFFSET(CIRCUITPY_INTERNAL_NVM_START_ADDR), FLASH_SECTOR_SIZE);
     flash_range_program(RMV_OFFSET(CIRCUITPY_INTERNAL_NVM_START_ADDR), buffer, FLASH_SECTOR_SIZE);
+    supervisor_flash_post_write();
     common_hal_mcu_enable_interrupts();
 }
 

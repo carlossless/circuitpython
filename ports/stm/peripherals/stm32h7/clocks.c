@@ -1,28 +1,8 @@
-/*
- * This file is part of the Micro Python project, http://micropython.org/
- *
- * The MIT License (MIT)
- *
- * Copyright (c) 2020 Lucian Copeland for Adafruit Industries
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
- */
+// This file is part of the CircuitPython project: https://circuitpython.org
+//
+// SPDX-FileCopyrightText: Copyright (c) 2020 Lucian Copeland for Adafruit Industries
+//
+// SPDX-License-Identifier: MIT
 
 #include "stm32h7xx_hal.h"
 #include "supervisor/shared/safe_mode.h"
@@ -31,6 +11,10 @@
 // H7 Series
 #ifdef STM32H743xx
 #include "stm32h7/stm32h743xx/clocks.h"
+#endif
+
+#ifdef STM32H750xx
+#include "stm32h7/stm32h750xx/clocks.h"
 #endif
 
 void stm32_peripherals_clocks_init(void) {
@@ -62,16 +46,16 @@ void stm32_peripherals_clocks_init(void) {
     RCC_OscInitStruct.HSI48State = RCC_HSI48_ON;
     #endif
     RCC_OscInitStruct.HSEState = BOARD_HSE_SOURCE;
-    RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
-    RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
-    RCC_OscInitStruct.PLL.PLLM = HSE_VALUE / 2000000;
+    RCC_OscInitStruct.PLL.PLLState = BOARD_PLL_STATE;
+    RCC_OscInitStruct.PLL.PLLSource = BOARD_PLL_SOURCE;
+    RCC_OscInitStruct.PLL.PLLM = CPY_CLK_PLLM;
     RCC_OscInitStruct.PLL.PLLN = CPY_CLK_PLLN;
     RCC_OscInitStruct.PLL.PLLP = CPY_CLK_PLLP;
     RCC_OscInitStruct.PLL.PLLQ = CPY_CLK_PLLQ;
-    RCC_OscInitStruct.PLL.PLLR = 2;
-    RCC_OscInitStruct.PLL.PLLRGE = RCC_PLL1VCIRANGE_1;
-    RCC_OscInitStruct.PLL.PLLVCOSEL = RCC_PLL1VCOWIDE;
-    RCC_OscInitStruct.PLL.PLLFRACN = 0;
+    RCC_OscInitStruct.PLL.PLLR = CPY_CLK_PLLR;
+    RCC_OscInitStruct.PLL.PLLRGE = CPY_CLK_PLLRGE;
+    RCC_OscInitStruct.PLL.PLLVCOSEL = CPY_CLK_PLLVCOSEL;
+    RCC_OscInitStruct.PLL.PLLFRACN = CPY_CLK_PLLFRACN;
     if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK) {
         // Clock issues are too problematic to even attempt recovery.
         // If you end up here, check whether your LSE settings match your board.
@@ -108,8 +92,28 @@ void stm32_peripherals_clocks_init(void) {
     #else
     PeriphClkInitStruct.UsbClockSelection = RCC_USBCLKSOURCE_PLL;
     #endif
-    HAL_RCCEx_PeriphCLKConfig(&PeriphClkInitStruct);
-
+    #ifdef STM32H750xx
+    // USB
+    PeriphClkInitStruct.PLL3.PLL3M = 1;
+    PeriphClkInitStruct.PLL3.PLL3N = 12;
+    PeriphClkInitStruct.PLL3.PLL3P = 2;
+    PeriphClkInitStruct.PLL3.PLL3Q = 4;
+    PeriphClkInitStruct.PLL3.PLL3R = 2;
+    PeriphClkInitStruct.PLL3.PLL3RGE = RCC_PLL3VCIRANGE_3;
+    PeriphClkInitStruct.PLL3.PLL3FRACN = 0;
+    PeriphClkInitStruct.UsbClockSelection = RCC_USBCLKSOURCE_PLL3;
+    // RNG
+    PeriphClkInitStruct.PeriphClockSelection = PeriphClkInitStruct.PeriphClockSelection | RCC_PERIPHCLK_RNG;
+    PeriphClkInitStruct.RngClockSelection = RCC_RNGCLKSOURCE_HSI48;
+    // RTC
+    PeriphClkInitStruct.PeriphClockSelection = PeriphClkInitStruct.PeriphClockSelection | RCC_PERIPHCLK_RTC;
+    PeriphClkInitStruct.RTCClockSelection = RCC_RTCCLKSOURCE_LSI;
+    #endif
+    if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInitStruct) != HAL_OK) {
+        while (1) {
+            ;
+        }
+    }
     // Enable USB Voltage detector
     HAL_PWREx_EnableUSBVoltageDetector();
 }

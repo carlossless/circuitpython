@@ -1,3 +1,0 @@
-#!/bin/sh
-# Add any supplied arguments.
-git describe --first-parent --dirty --tags --always --match "[1-9].*" "$@"

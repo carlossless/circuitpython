@@ -6,10 +6,13 @@
 
 import json
 import os
+import re
+import requests
 import subprocess
 import sys
 import sh
 import base64
+from io import StringIO
 from datetime import date
 from sh.contrib import git
 
@@ -19,73 +22,11 @@ import adabot.github_requests as github
 sys.path.append("../docs")
 from shared_bindings_matrix import (
     SUPPORTED_PORTS,
-    aliases_by_board,
     support_matrix_by_board,
+    get_board_mapping,
 )
 
-BIN = ("bin",)
-UF2 = ("uf2",)
-BIN_UF2 = ("bin", "uf2")
-HEX = ("hex",)
-HEX_UF2 = ("hex", "uf2")
-SPK = ("spk",)
-DFU = ("dfu",)
-BIN_DFU = ("bin", "dfu")
-COMBINED_HEX = ("combined.hex",)
-KERNEL8_IMG = ("disk.img.zip", "kernel8.img")
-KERNEL_IMG = ("disk.img.zip", "kernel.img")
-
-# Default extensions
-extension_by_port = {
-    "atmel-samd": UF2,
-    "broadcom": KERNEL8_IMG,
-    "cxd56": SPK,
-    "espressif": BIN_UF2,
-    "litex": DFU,
-    "mimxrt10xx": HEX_UF2,
-    "nrf": UF2,
-    "raspberrypi": UF2,
-    "stm": BIN,
-}
-
-# Per board overrides
-extension_by_board = {
-    # samd
-    "arduino_mkr1300": BIN_UF2,
-    "arduino_mkrzero": BIN_UF2,
-    "arduino_nano_33_iot": BIN_UF2,
-    "arduino_zero": BIN_UF2,
-    "feather_m0_adalogger": BIN_UF2,
-    "feather_m0_basic": BIN_UF2,
-    "feather_m0_rfm69": BIN_UF2,
-    "feather_m0_rfm9x": BIN_UF2,
-    "uchip": BIN_UF2,
-    # nRF52840 dev kits that may not have UF2 bootloaders,
-    "makerdiary_nrf52840_mdk": HEX,
-    "makerdiary_nrf52840_mdk_usb_dongle": HEX_UF2,
-    "pca10056": BIN_UF2,
-    "pca10059": BIN_UF2,
-    "electronut_labs_blip": HEX,
-    "microbit_v2": COMBINED_HEX,
-    # stm32
-    "meowbit_v121": UF2,
-    "sparkfun_stm32_thing_plus": BIN_UF2,
-    "swan_r5": BIN_UF2,
-    # esp32c3
-    "adafruit_qtpy_esp32c3": BIN,
-    "ai_thinker_esp32-c3s": BIN,
-    "ai_thinker_esp32-c3s-2m": BIN,
-    "espressif_esp32c3_devkitm_1_n4": BIN,
-    "lilygo_ttgo_t-01c3": BIN,
-    "lolin_c3_mini": BIN,
-    "microdev_micro_c3": BIN,
-    "lilygo_ttgo_t-oi-plus": BIN,
-    # broadcom
-    "raspberrypi_zero": KERNEL_IMG,
-    "raspberrypi_zero_w": KERNEL_IMG,
-}
-
-language_allow_list = set(
+LANGUAGE_ALLOW_LIST = set(
     [
         "ID",
         "de_DE",
@@ -114,43 +55,19 @@ def get_languages(list_all=False):
         if f.name.endswith(".po"):
             languages.add(f.name[:-3])
     if not list_all:
-        languages = languages & language_allow_list
+        languages = languages & LANGUAGE_ALLOW_LIST
     return sorted(list(languages), key=str.casefold)
-
-
-def get_board_mapping():
-    boards = {}
-    for port in SUPPORTED_PORTS:
-        board_path = os.path.join("../ports", port, "boards")
-        for board_path in os.scandir(board_path):
-            if board_path.is_dir():
-                board_files = os.listdir(board_path.path)
-                board_id = board_path.name
-                extensions = extension_by_port[port]
-                extensions = extension_by_board.get(board_path.name, extensions)
-                aliases = aliases_by_board.get(board_path.name, [])
-                boards[board_id] = {
-                    "port": port,
-                    "extensions": extensions,
-                    "download_count": 0,
-                    "aliases": aliases,
-                }
-                for alias in aliases:
-                    boards[alias] = {
-                        "port": port,
-                        "extensions": extensions,
-                        "download_count": 0,
-                        "alias": True,
-                        "aliases": [],
-                    }
-    return boards
 
 
 def get_version_info():
     version = None
-    sha = git("rev-parse", "--short", "HEAD").stdout.decode("utf-8")
+    buffer = StringIO()
+    git("rev-parse", "--short", "HEAD", _out=buffer)
+    sha = buffer.getvalue().strip()
     try:
-        version = git("describe", "--tags", "--exact-match").stdout.decode("utf-8").strip()
+        buffer = StringIO()
+        git("describe", "--tags", "--exact-match", _out=buffer)
+        version = buffer.getvalue().strip()
     except sh.ErrorReturnCode_128:
         # No exact match
         pass
@@ -159,7 +76,35 @@ def get_version_info():
         sha = os.environ["GITHUB_SHA"]
 
     if not version:
-        version = "{}-{}".format(date.today().strftime("%Y%m%d"), sha[:7])
+        # Get branch we are PR'ing into, if any.
+        # Works for pull_request actions.
+        branch = os.environ.get("GITHUB_BASE_REF", "")
+        if not branch:
+            # Works for push actions (usually a PR merge).
+            branch = os.environ.get("GITHUB_REF_NAME", "")
+        if not branch:
+            branch = "no-branch"
+        # replace slashes with underscores to prevent path subdirs.
+        branch = branch.strip().replace("/", "_")
+
+        # Get PR number, if any
+        # PR jobs put the PR number in PULL.
+        pull_request = os.environ.get("PULL", "")
+        if not pull_request:
+            # PR merge jobs put a commit message that includes the PR number in HEAD_COMMIT_MESSAGE.
+            head_commit_message = os.environ.get("HEAD_COMMIT_MESSAGE", "")
+            if head_commit_message:
+                match = re.match(r"Merge pull request #(\d+) from", head_commit_message)
+                if match:
+                    pull_request = match.group(1)
+
+        if pull_request:
+            pull_request = f"-PR{pull_request}"
+
+        date_stamp = date.today().strftime("%Y%m%d")
+        short_sha = sha[:7]
+        # Example: 20231121-8.2.x-PR9876-123abcd
+        version = f"{date_stamp}-{branch}{pull_request}-{short_sha}"
 
     return sha, version
 
@@ -181,7 +126,19 @@ def get_current_info():
     response = response.json()
 
     git_info = commit_sha, response["sha"]
-    current_list = json.loads(base64.b64decode(response["content"]).decode("utf-8"))
+
+    if response["content"] != "":
+        # if the file is there
+        current_list = json.loads(base64.b64decode(response["content"]).decode("utf-8"))
+    else:
+        # if too big, the file is not included
+        download_url = response["download_url"]
+        response = requests.get(download_url)
+        if not response.ok:
+            print(response.text)
+            raise RuntimeError("cannot get previous files.json")
+        current_list = response.json()
+
     current_info = {}
     for info in current_list:
         current_info[info["id"]] = info
@@ -208,10 +165,10 @@ def create_pr(changes, updated, git_info, user):
     pr_title = "Automated website update for release {}".format(changes["new_release"])
     boards = ""
     if changes["new_boards"]:
-        boards = "New boards:\n* " + "\n* ".join(changes["new_boards"])
+        boards = "New boards:\n* " + "\n* ".join(sorted(changes["new_boards"]))
     languages = ""
     if changes["new_languages"]:
-        languages = "New languages:\n* " + "\n* ".join(changes["new_languages"])
+        languages = "New languages:\n* " + "\n* ".join(sorted(changes["new_languages"]))
     message = "Automated website update for release {} by Blinka.\n\n{}\n\n{}\n".format(
         changes["new_release"], boards, languages
     )
@@ -219,9 +176,7 @@ def create_pr(changes, updated, git_info, user):
     create_branch = {"ref": "refs/heads/" + branch_name, "sha": commit_sha}
     response = github.post("/repos/{}/circuitpython-org/git/refs".format(user), json=create_branch)
     if not response.ok and response.json()["message"] != "Reference already exists":
-        print("unable to create branch")
-        print(response.text)
-        return
+        raise SystemExit(f"unable to create branch: {response.text}")
 
     update_file = {
         "message": message,
@@ -234,9 +189,7 @@ def create_pr(changes, updated, git_info, user):
         "/repos/{}/circuitpython-org/contents/_data/files.json".format(user), json=update_file
     )
     if not response.ok:
-        print("unable to post new file")
-        print(response.text)
-        return
+        raise SystemExit(f"unable to post new file: {response.text}")
     pr_info = {
         "title": pr_title,
         "head": user + ":" + branch_name,
@@ -246,9 +199,7 @@ def create_pr(changes, updated, git_info, user):
     }
     response = github.post("/repos/adafruit/circuitpython-org/pulls", json=pr_info)
     if not response.ok:
-        print("unable to create pr")
-        print(response.text)
-        return
+        raise SystemExit(f"unable to create pr: {response.text}")
     print(changes)
     print(pr_info)
 
@@ -265,9 +216,6 @@ def print_active_user():
 
 
 def generate_download_info():
-    boards = {}
-    errors = []
-
     new_tag = os.environ["RELEASE_TAG"]
 
     changes = {"new_release": new_tag, "new_boards": [], "new_languages": []}
@@ -280,7 +228,7 @@ def generate_download_info():
 
     languages = get_languages()
 
-    support_matrix = support_matrix_by_board(use_branded_name=False)
+    support_matrix = support_matrix_by_board(use_branded_name=False, withurl=False)
 
     new_stable = "-" not in new_tag
 
@@ -300,39 +248,31 @@ def generate_download_info():
 
     board_mapping = get_board_mapping()
 
-    for port in SUPPORTED_PORTS:
-        board_path = os.path.join("../ports", port, "boards")
-        for board_path in os.scandir(board_path):
-            if board_path.is_dir():
-                board_files = os.listdir(board_path.path)
-                board_id = board_path.name
-                board_info = board_mapping[board_id]
-
-                for alias in [board_id] + board_info["aliases"]:
-                    alias_info = board_mapping[alias]
-                    if alias not in current_info:
-                        changes["new_boards"].append(alias)
-                        current_info[alias] = {"downloads": 0, "versions": []}
-
-                    new_version = {
-                        "stable": new_stable,
-                        "version": new_tag,
-                        "modules": support_matrix[alias][0],
-                        "languages": languages,
-                        "extensions": board_info["extensions"],
-                        "frozen_libraries": [frozen[0] for frozen in support_matrix[alias][1]],
-                    }
-                    current_info[alias]["downloads"] = alias_info["download_count"]
-                    current_info[alias]["versions"].append(new_version)
+    for board_id, board_info in board_mapping.items():
+        if board_id not in current_info:
+            changes["new_boards"].append(board_id)
+            current_info[board_id] = {"downloads": 0, "versions": []}
+        new_version = {
+            "stable": new_stable,
+            "version": new_tag,
+            "languages": languages,
+            # add modules, extensions, frozen_libraries explicitly
+            "modules": support_matrix[board_id]["modules"],
+            "extensions": support_matrix[board_id]["extensions"],
+            "frozen_libraries": support_matrix[board_id]["frozen_libraries"],
+        }
+        current_info[board_id]["downloads"] = board_info["download_count"]
+        current_info[board_id]["versions"].append(new_version)
 
     changes["new_languages"] = set(languages) - previous_languages
 
     if changes["new_release"] and user:
         create_pr(changes, current_info, git_info, user)
     else:
-        print("No new release to update")
         if "DEBUG" in os.environ:
             print(create_json(current_info).decode("utf8"))
+        else:
+            print("No new release to update")
 
 
 if __name__ == "__main__":
