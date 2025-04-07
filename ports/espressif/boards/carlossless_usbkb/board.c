@@ -42,7 +42,7 @@ void board_init(void) {
         i2c,
         0x3c,
         NULL
-    );
+        );
 
     busdisplay_busdisplay_obj_t *display = &allocate_display()->display;
     display->base.type = &busdisplay_busdisplay_type;
@@ -76,5 +76,5 @@ void board_init(void) {
         true,           // backlight_on_high
         true,           // SH1107_addressing
         50000           // backlight pwm frequency (unused)
-    );
+        );
 }
