@@ -1,5 +1,5 @@
-USB_VID = 0x239A
-USB_PID = 0x80EC
+USB_VID = 0xCAFE
+USB_PID = 0xBABE
 USB_PRODUCT = "carlossless usbkb"
 USB_MANUFACTURER = "carlossless"
 
