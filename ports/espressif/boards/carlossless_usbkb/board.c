@@ -1,14 +1,18 @@
-#include "supervisor/board.h"
-#include "mpconfigboard.h"
-#include "shared-bindings/busio/I2C.h"
-#include "shared-bindings/displayio/I2CDisplay.h"
-#include "shared-bindings/microcontroller/Pin.h"
+// This file is part of the CircuitPython project: https://circuitpython.org
+//
+// SPDX-License-Identifier: MIT
+
+#include "shared-bindings/board/__init__.h"
+#include "shared-bindings/i2cdisplaybus/I2CDisplayBus.h"
 #include "shared-module/displayio/__init__.h"
+#include "shared-bindings/busio/I2C.h"
+#include "shared-bindings/microcontroller/Pin.h"
+#include "supervisor/board.h"
+#include "supervisor/shared/board.h"
+#include "shared-bindings/board/__init__.h"
 
 #define DISPLAY_WIDTH 128
 #define DISPLAY_HEIGHT 32
-
-displayio_fourwire_obj_t board_display_obj;
 
 // Sequence from page 19 here: https://cdn-shop.adafruit.com/datasheets/UG-2864HSWEG01+user+guide.pdf
 uint8_t display_init_sequence[] = {
@@ -28,34 +32,22 @@ uint8_t display_init_sequence[] = {
 };
 
 void board_init(void) {
-    // USB
-    common_hal_never_reset_pin(&pin_GPIO19);
-    common_hal_never_reset_pin(&pin_GPIO20);
+    busio_i2c_obj_t *i2c = common_hal_board_create_i2c(0);
 
     // display
-    busio_i2c_obj_t *i2c = &displays[0].i2cdisplay_bus.inline_bus;
-    common_hal_busio_i2c_construct(
-        i2c,
-        &pin_GPIO7,  // SCL
-        &pin_GPIO8,  // SDA
-        100000,      // frequency
-        255          // timeout
-    );
-
-    displayio_i2cdisplay_obj_t *bus = &displays[0].i2cdisplay_bus;
-    bus->base.type = &displayio_i2cdisplay_type;
-
-    common_hal_displayio_i2cdisplay_construct(
+    i2cdisplaybus_i2cdisplaybus_obj_t *bus = &allocate_display_bus()->i2cdisplay_bus;
+    bus->base.type = &i2cdisplaybus_i2cdisplaybus_type;
+    common_hal_i2cdisplaybus_i2cdisplaybus_construct(
         bus,
         i2c,
-        0x3C,
+        0x3c,
         NULL
     );
 
-    displayio_display_obj_t *display = &displays[0].display;
-    display->base.type = &displayio_display_type;
+    busdisplay_busdisplay_obj_t *display = &allocate_display()->display;
+    display->base.type = &busdisplay_busdisplay_type;
 
-    common_hal_displayio_display_construct(
+    common_hal_busdisplay_busdisplay_construct(
         display,
         bus,
         DISPLAY_WIDTH,  // width (after rotation)
@@ -77,23 +69,12 @@ void board_init(void) {
         NULL,           // backlight pin
         0x81,           // brightness command
         1.0f,           // brightness
-        false,          // auto_brightness
         true,           // single_byte_bounds
         true,           // data_as_commands
         true,           // auto_refresh
         60,             // native_frames_per_second
         true,           // backlight_on_high
-        true            // SH1107_addressing
+        true,           // SH1107_addressing
+        50000           // backlight pwm frequency (unused)
     );
-}
-
-bool board_requests_safe_mode(void) {
-    return false;
-}
-
-void reset_board(void) {
-
-}
-
-void board_deinit(void) {
 }
